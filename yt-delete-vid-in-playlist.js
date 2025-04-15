@@ -22,16 +22,16 @@ function logger(message) {
 
 async function getSApiSidHash() {
     function sha1(str) {
-      return window.crypto.subtle.digest("SHA-1", new TextEncoder("utf-8").encode(str)).then(buf => {
-        return Array.prototype.map.call(new Uint8Array(buf), x=>(('00'+x.toString(16)).slice(-2))).join('');
-      });
+        return window.crypto.subtle.digest("SHA-1", new TextEncoder("utf-8").encode(str)).then(buf => {
+            return Array.prototype.map.call(new Uint8Array(buf), x => (('00' + x.toString(16)).slice(-2))).join('');
+        });
     }
 
     function getCookie(name) {
-      return document.cookie
-        .split("; ")
-        .find(row => row.startsWith(name + "="))
-        ?.split("=")[1];
+        return document.cookie
+            .split("; ")
+            .find(row => row.startsWith(name + "="))
+            ?.split("=")[1];
     }
 
     // Get the required values.
@@ -287,7 +287,7 @@ function addRemoveButtons() {
 }
 
 
-(function() {
+(function () {
     'use strict';
 
     console.log('Script started');
