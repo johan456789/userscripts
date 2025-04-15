@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name      Youtube button to delete a video from a playlist
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Adds a button to directly remove videos from the playlist on YouTube
 // @author       You
 // @match        https://www.youtube.com/*
@@ -10,10 +10,6 @@
 // ==/UserScript==
 
 // this script is edited from https://update.greasyfork.org/scripts/499379/Youtube%20button%20to%20delete%20a%20video%20from%20a%20playlist.user.js
-// 2025-03-21 feat: only show the trashcan button when the playlist is editable
-// 2025-03-22 feat: use reverse engineered api to fetch account menu data. and use ui as fallback method
-// 2025-03-22 fix: bug when visiting playlist url from non-playlist url the script won't run
-
 
 function logger(message) {
     console.log("[YT-playlist] " + message);
@@ -63,7 +59,7 @@ function waitForElement(selector, callback, timeout = 5000) {
 
     setTimeout(() => {
         if (!isDisconnected) {
-            console.log(`Error: Element '${selector}' not found within ${timeout}ms.`);
+            logger(`Error: Element '${selector}' not found within ${timeout}ms.`);
             observer.disconnect(); // Ensure we stop observing
         }
     }, timeout);
@@ -120,7 +116,7 @@ async function fetchAccountMenuData() {
 }
 
 async function getCurrentUserName() {
-    console.log('getting current user name');
+    logger('getting current user name');
 
     // use reverse engineered api
     try {
@@ -129,7 +125,7 @@ async function getCurrentUserName() {
                 const data = await fetchAccountMenuData();
                 // Extract the username from the response
                 const name = data?.actions?.[0]?.openPopupAction?.popup?.multiPageMenuRenderer?.header?.activeAccountHeaderRenderer?.accountName?.simpleText || 'Unknown User';
-                console.log(`username: ${name}`);
+                logger(`username: ${name}`);
                 resolve(name);
             } catch (error) {
                 resolve('Unknown User'); // Fallback on error
@@ -137,7 +133,7 @@ async function getCurrentUserName() {
         });
         return profileName || 'Unknown User'; // Fallback if name is empty
     } catch (error) {
-        console.log('failed to fetch account menu data via reverse engineered api. trying ui interaction now...');
+        logger('failed to fetch account menu data via reverse engineered api. trying ui interaction now...');
     }
 
     // if that failed, try using ui
@@ -149,27 +145,27 @@ async function getCurrentUserName() {
         const profileName = await new Promise((resolve) => {
             waitForElement('#account-name', (element) => {
                 const name = element.textContent.trim(); // Clean up whitespace
-                console.log(`username: ${name}`);
+                logger(`username: ${name}`);
                 resolve(name); // Pass the name back via the Promise
             });
         });
         return profileName || 'Unknown User'; // Fallback if name is empty
     } catch (error) {
-        console.error('Error getting username:', error);
+        logger('Error getting username.', error);
         return 'Unknown User'; // Fallback on timeout or error
     }
 }
 
 async function checkPlaylistEditable() {
     try {
-        console.log('running checkPlaylistEditable');
+        logger('running checkPlaylistEditable');
         // Case 1: Check if URL contains list=WL (Watch Later playlist) or list=ll (liked video)
         if (window.location.search.includes('list=WL') || window.location.search.includes('list=LL')) {
             return true;
         }
 
         const currentUserName = await getCurrentUserName();
-        console.log(`inside checkPlaylistEditable, currentUserName: ${currentUserName}`);
+        logger(`inside checkPlaylistEditable, currentUserName: ${currentUserName}`);
 
         // Define the avatar stack selector
         const avatarStackSelector = "#page-header > yt-page-header-renderer > yt-page-header-view-model > div.page-header-view-model-wiz__page-header-content > div.page-header-view-model-wiz__page-header-headline > div > yt-content-metadata-view-model > div:nth-child(1) > yt-avatar-stack-view-model > span";
@@ -180,11 +176,11 @@ async function checkPlaylistEditable() {
                 waitForElement(avatarStackSelector, (element) => resolve(element));
             });
         } catch (e) {
-            console.log(`Error: ${e}`)
+            logger(`Error: ${e}`)
         }
 
         if (!avatarStack) {
-            console.log('Avatar stack element not found!');
+            logger('Avatar stack element not found!');
             return false; // No avatar stack, assume not editable
         }
 
@@ -192,7 +188,7 @@ async function checkPlaylistEditable() {
         const linkElement = avatarStack.querySelector('a');
         if (linkElement) {
             const linkText = linkElement.textContent;
-            console.log(`linktext: ${linkText}; currentUserName: ${currentUserName}; match: ${linkText.includes(currentUserName)}`)
+            logger(`linktext: ${linkText}; currentUserName: ${currentUserName}; match: ${linkText.includes(currentUserName)}`)
             return linkText.includes(currentUserName); // Check if username is in the string
         }
 
@@ -217,7 +213,7 @@ async function checkPlaylistEditable() {
         });
 
         if (!nameElement) {
-            console.log('Collaborator names not found!');
+            logger('Collaborator names not found!');
             document.body.click(); // Attempt to close popup
             return false;
         }
@@ -246,7 +242,7 @@ async function checkPlaylistEditable() {
 }
 
 function addRemoveButton(video) {
-    console.log('Adding remove button');
+    logger('Adding remove button');
     if (!video.querySelector('.remove-button')) {
         const button = document.createElement('button');
         button.classList.add('remove-button');
@@ -280,9 +276,9 @@ function addRemoveButton(video) {
 }
 
 function addRemoveButtons() {
-    console.log('Adding remove buttons to all existing videos');
+    logger('Adding remove buttons to all existing videos');
     const videoContainers = document.querySelectorAll('ytd-playlist-video-renderer');
-    console.log('Found', videoContainers.length, 'videos');
+    logger('Found', videoContainers.length, 'videos');
     videoContainers.forEach(addRemoveButton);
 }
 
@@ -290,7 +286,7 @@ function addRemoveButtons() {
 (function () {
     'use strict';
 
-    console.log('Script started');
+    logger('Script started');
 
     const style = document.createElement('style');
     style.textContent = `
@@ -319,7 +315,7 @@ function addRemoveButtons() {
     document.head.append(style);
 
     function init() {
-        console.log('Initializing script');
+        logger('Initializing script');
 
         let lastUrl = window.location.href;
         let observer = null;
@@ -329,14 +325,14 @@ function addRemoveButtons() {
             if (observer) observer.disconnect();
 
             checkPlaylistEditable().then(editable => {
-                console.log(`this video is editable: ${editable}`);
+                logger(`this video is editable: ${editable}`);
                 const isEditable = editable;
                 if (isEditable) {
                     addRemoveButtons(); // Add buttons to existing videos
 
                     // Set up observer for newly loaded videos
                     observer = new MutationObserver(mutations => {
-                        console.log(`in observer: isEditable is ${isEditable}`);
+                        logger(`in observer: isEditable is ${isEditable}`);
                         if (isEditable) {
                             mutations.forEach(mutation => {
                                 mutation.addedNodes.forEach(node => {
@@ -359,7 +355,7 @@ function addRemoveButtons() {
         setInterval(() => {
             if (window.location.href !== lastUrl) {
                 lastUrl = window.location.href;
-                console.log('URL changed, re-checking playlist editability');
+                logger('URL changed, re-checking playlist editability');
                 setupDeleteButtons();
             }
         }, 100); // check periodically
