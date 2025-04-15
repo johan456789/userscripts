@@ -5,7 +5,7 @@
 // @grant        GM_setClipboard
 // @license      MIT
 // @run-at       document-end
-// @version      2.1
+// @version      2.2
 // @require      https://gist.github.com/johan456789/0493c123c1b9182cf546e5e49dbb8067/raw/gistfile1.txt
 // ==/UserScript==
 
@@ -31,7 +31,7 @@
 // DONE: create a logger function
 // DONE: fix: when left clicking the video from channel page, the button doesn't load
 // DONE: use the same hover and click effect as native buttons
-// TODO 0: observer doesn't work at all
+// DONE: observer doesn't work at all
 // TODO 1: fix: styling when transcript is unavailable is off because of conflict with yt official css rules
 // TODO 2: the css rule when the button is clicked is still off. dunno why
 
@@ -193,6 +193,7 @@ const cssText = `
 
         // observe element load
         const observer = new MutationObserver(async (mutations, observer) => {
+            logger("Observer callback fired");
             const owner = document.querySelector("#owner");
             if (owner) {
                 observer.disconnect();
@@ -201,17 +202,24 @@ const cssText = `
                 const pageRefreshHandler = async () => {
                     const videoId = getVideoId();
                     logger(`updating transcript (in cache: ${transcriptCache.has(videoId)})`);
+                    let fullTranscript;
                     if (!transcriptCache.has(videoId)) {
-                        const fullTranscript = await prefetchTranscript(videoId);
+                        fullTranscript = await prefetchTranscript(videoId);
+                        logger("pageRefreshHandler: fullTranscript", fullTranscript);
                         if (fullTranscript) {
                             transcriptCache.set(videoId, fullTranscript);
                         }
+                    } else {
+                        logger("pageRefreshHandler: transcript already cached");
                     }
                     updateButtonAppearance(button, transcriptCache.has(videoId));
-                    logger(`finished updating transcript`);
+                    logger("pageRefreshHandler: finished updating transcript");
                 }
                 await pageRefreshHandler();
-                // window.addEventListener("yt-navigate-finish", pageRefreshHandler);
+                window.addEventListener("yt-navigate-finish", async () => {
+                    logger("[YT-transcript] yt-navigate-finish detected, updating transcript");
+                    await pageRefreshHandler();
+                });
             }
         });
 
