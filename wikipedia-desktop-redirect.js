@@ -1,13 +1,15 @@
 // ==UserScript==
-// @name        wikipedia_desktop_redirect
-// @namespace   https://jspenguin.org/monkey
+// @name        Wikipedia-Desktop-Redirect
 // @description Redirect mobile wikipedia to desktop version
 // @run-at      document-start
 // @include     http://*.m.wikipedia.org/*
 // @include     https://*.m.wikipedia.org/*
-// @version     1.2
+// @version     1.0
 // @grant       none
+// @updateURL   https://github.com/johan456789/userscripts/raw/main/wikipedia-desktop-redirect.js
+// @downloadURL https://github.com/johan456789/userscripts/raw/main/wikipedia-desktop-redirect.js
 // ==/UserScript==
 
-var m = /^(https?:\/\/.*)\.m(\.wikipedia\.org\/.*)/.exec(location.href);
-if (m) location.href = m[1] + m[2];
+if (location.href.includes('.m.wikipedia.org')) {
+    location.replace(location.href.replace('.m.wikipedia.org', '.wikipedia.org'));
+}
