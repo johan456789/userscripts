@@ -9,8 +9,8 @@
 // @grant        none
 // @run-at       document-end
 // @license      MIT
-// @downloadURL  https://github.com/johan456789/userscripts/raw/main/google-aimode-auto-focus.js
-// @updateURL    https://github.com/johan456789/userscripts/raw/main/google-aimode-auto-focus.js
+// @downloadURL  https://github.com/johan456789/userscripts/raw/refs/heads/main/google-aimode-auto-focus.js
+// @updateURL    https://github.com/johan456789/userscripts/raw/refs/heads/main/google-aimode-auto-focus.js
 // ==/UserScript==
 
 (function() {
