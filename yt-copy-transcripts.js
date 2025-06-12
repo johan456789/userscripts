@@ -5,8 +5,11 @@
 // @grant        GM_setClipboard
 // @license      MIT
 // @run-at       document-end
-// @version      2.2
+// @noframes
+// @version      2.2.1
 // @require      https://gist.github.com/johan456789/0493c123c1b9182cf546e5e49dbb8067/raw/gistfile1.txt
+// @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
+// @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // ==/UserScript==
 
 // 2024-03-25 v1.2 edited from https://greasyfork.org/en/scripts/468715-youtube-script-downloader-button
