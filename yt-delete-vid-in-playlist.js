@@ -1,12 +1,15 @@
 // ==UserScript==
 // @name      Youtube button to delete a video from a playlist
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.2.1
 // @description  Adds a button to directly remove videos from the playlist on YouTube
 // @author       You
 // @match        https://www.youtube.com/*
+// @noframes
 // @grant        none
 // @license      MIT
+// @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-delete-vid-in-playlist.js
+// @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-delete-vid-in-playlist.js
 // ==/UserScript==
 
 // this script is edited from https://update.greasyfork.org/scripts/499379/Youtube%20button%20to%20delete%20a%20video%20from%20a%20playlist.user.js
