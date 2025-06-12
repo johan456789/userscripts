@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Focus on TextBox in Google Search AI Mode (udm=50)
 // @namespace    https://greasyfork.org/en/users/688917
-// @version      1.1
+// @version      1.1.1
 // @description  Automatically focuses on the textarea when the page loads.
 // @author       You
 // @match        https://www.google.com/search?udm=50*
@@ -9,8 +9,8 @@
 // @grant        none
 // @run-at       document-end
 // @license      MIT
-// @downloadURL https://update.greasyfork.org/scripts/531522/Auto%20Focus%20on%20TextBox%20in%20Google%20Search%20AI%20Mode%20%28udm%3D50%29.user.js
-// @updateURL https://update.greasyfork.org/scripts/531522/Auto%20Focus%20on%20TextBox%20in%20Google%20Search%20AI%20Mode%20%28udm%3D50%29.meta.js
+// @downloadURL  https://github.com/johan456789/userscripts/raw/main/google-aimode-auto-focus.js
+// @updateURL    https://github.com/johan456789/userscripts/raw/main/google-aimode-auto-focus.js
 // ==/UserScript==
 
 (function() {
