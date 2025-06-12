@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    WYOWW
-// @version      3.6.0
+// @version      3.6.1
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -16,11 +16,23 @@
 // @icon         https://en.wikipedia.org/static/favicon/wikipedia.ico
 // @grant GM_setValue
 // @grant GM_getValue
+// @updateURL    https://github.com/johan456789/userscripts/raw/main/wikitube.js
+// @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikitube.js
 // ==/UserScript==
 
 $(document).ready(function () {
     // check api key validity: https://www.googleapis.com/youtube/v3/search?part=snippet&q=YouTube+Data+API&type=video&key=YOUR_API_KEY
-    const YOUTUBE_DATA_API_CREDENTIAL = '';
+    var YOUTUBE_DATA_API_CREDENTIAL = GM_getValue("youtubeApiKey", "");
+    
+    if (!YOUTUBE_DATA_API_CREDENTIAL) {
+        YOUTUBE_DATA_API_CREDENTIAL = prompt(
+            '[Wikitube] YouTube API key not set. Please enter your YouTube Data API v3 key:',
+            ''
+        );
+        if (YOUTUBE_DATA_API_CREDENTIAL) {
+            GM_setValue("youtubeApiKey", YOUTUBE_DATA_API_CREDENTIAL);
+        }
+    }
 
     // pages of wikipedia which should disable Wikitube
     var banned_paths = [
