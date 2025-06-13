@@ -3,7 +3,7 @@
 // @require      https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js
 // @require      https://gist.github.com/raw/2625891/waitForKeyElements.js
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.3.1
 // @description  Show answers by default instead of 'all related' answers
 // @match        https://www.quora.com/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
@@ -16,7 +16,7 @@
     'use strict';
     console.log('running');
 
-    const dropdownBtnSelector = '#mainContent > div.q-box button';
+    const dropdownBtnSelector = '#mainContent .q-box button';
     const dropdownMenuSelector = '.q-box .puppeteer_test_popover_menu';
 
     waitForKeyElements(dropdownBtnSelector, click);
