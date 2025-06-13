@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Quora-Show-Answers-By-Default
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.4.1
 // @match        https://www.quora.com/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/quora-show-answers-by-default.js
@@ -16,7 +16,7 @@
     const dropdownMenuSelector = '.q-box .puppeteer_test_popover_menu';
 
     // Delay (ms) between clicking the dropdown button and selecting the "answer" option.
-    const SECOND_CLICK_DELAY_MS = 300;
+    const SECOND_CLICK_DELAY_MS = 100;
 
     waitForElement(dropdownBtnSelector, clickDropdownBtn);
     waitForElement(dropdownMenuSelector, clickAnswerInMenu);
