@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name      Youtube button to delete a video from a playlist
 // @namespace    http://tampermonkey.net/
-// @version      2.2.3
+// @version      2.2.4
 // @description  Adds a button to directly remove videos from the playlist on YouTube
 // @author       You
 // @match        https://www.youtube.com/*
 // @noframes
 // @grant        none
 // @license      MIT
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-delete-vid-in-playlist.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-delete-vid-in-playlist.js
 // ==/UserScript==
@@ -44,28 +45,6 @@ async function getSApiSidHash() {
     const digest = await sha1(inputString);
 
     return `${TIMESTAMP}_${digest}_u`;
-}
-
-function waitForElement(selector, callback, timeout = 5000) {
-    const observer = new MutationObserver((mutations, obs) => {
-        const element = document.querySelector(selector);
-        if (element) {
-            obs.disconnect(); // Stop observing once the element is found
-            isDisconnected = true;
-            callback(element);
-        }
-    });
-
-    let isDisconnected = false;
-
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    setTimeout(() => {
-        if (!isDisconnected) {
-            logger(`Error: Element '${selector}' not found within ${timeout}ms.`);
-            observer.disconnect(); // Ensure we stop observing
-        }
-    }, timeout);
 }
 
 async function fetchAccountMenuData() {

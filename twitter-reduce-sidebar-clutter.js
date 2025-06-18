@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Reduce Sidebar Clutter
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Move less-used items from sidebar to overflow menu.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -10,6 +10,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/twitter-reduce-sidebar-clutter.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/twitter-reduce-sidebar-clutter.js
 // ==/UserScript==
@@ -88,28 +89,6 @@ const overflowMenuSelector = 'div[role="menu"] > div > div > div > div'; // the 
                 }
             });
         });
-    }
-
-    function waitForElement(selector, callback, timeout = 5000) {
-        const observer = new MutationObserver((mutations, obs) => {
-            const element = document.querySelector(selector);
-            if (element) {
-                obs.disconnect(); // Stop observing once the element is found
-                isDisconnected = true;
-                callback(element);
-            }
-        });
-    
-        let isDisconnected = false;
-    
-        observer.observe(document.body, { childList: true, subtree: true });
-    
-        setTimeout(() => {
-            if (!isDisconnected) {
-                logger(`Error: Element '${selector}' not found within ${timeout}ms.`);
-                observer.disconnect(); // Ensure we stop observing
-            }
-        }, timeout);
     }
 
     waitForElement(moreButtonSelector, (moreButton) => {
