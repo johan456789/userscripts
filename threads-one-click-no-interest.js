@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Threads One-Click Not Interested
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Adds a "Not Interested" button to Threads.net posts for one-click action.
 // @author       You
 // @match        https://www.threads.net/*
@@ -48,24 +48,27 @@
 
             overflowBtn.click();
 
-            // 2. wait 500 ms then find menu and click Not interested
-            setTimeout(() => {
-                const menu = document.querySelector('div[role="menu"]');
+            // 2. wait for the overflow menu to appear then click "Not interested"
+            waitForElement('div[role="menu"] div[role="button"]', (menuItem) => {
+                const menu = menuItem.closest('div[role="menu"]');
                 if (!menu) {
-                    logger('Menu not found after opening overflow.');
+                    logger('Could not find parent menu.');
                     return;
                 }
-
                 const menuItems = menu.querySelectorAll('div[role="button"], span');
+                let found = false;
                 for (const item of menuItems) {
                     if (item.textContent.trim() === 'Not interested') {
-                        logger('Found \"Not interested\" menu item, clicking.');
+                        logger('Found "Not interested" menu item, clicking.');
                         item.click();
+                        found = true;
                         return;
                     }
                 }
-                logger('Could not find \"Not interested\" option in menu.');
-            }, 500);
+                if (!found) {
+                    logger('Could not find "Not interested" menu item.');
+                }
+            });
         }
 
         function addNotInterestedButton(buttonRow) {
