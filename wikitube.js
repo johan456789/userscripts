@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Wikitube - YouTube on Wikipedia & 百度百科
+// @name         Wikitube - YouTube on Wikipedia & Baidu Baike
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
-// @namespace    WYOWW
-// @version      3.6.1
+// @namespace    thyu
+// @version      3.6.2
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -12,7 +12,7 @@
 // @include      http*://baike.baidu.com/item/*
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js
 // @author       Mark Dunne | http://markdunne.github.io/ | https://chrome.google.com/webstore/detail/wikitube/aneddidibfifdpbeppmpoackniodpekj
-// @developer    vinc, drhouse
+// @developer    vinc, drhouse, thyu
 // @icon         https://en.wikipedia.org/static/favicon/wikipedia.ico
 // @grant GM_setValue
 // @grant GM_getValue
