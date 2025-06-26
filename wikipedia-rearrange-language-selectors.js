@@ -5,7 +5,7 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.1.4
+// @version        1.1.5
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
@@ -30,12 +30,17 @@ const removeOthers = true;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// Locate the sidebar that contains the language links (id="p-lang").
 const pLang = window.document.querySelector("div#p-lang");
-if (pLang == null) return;
+if (pLang == null) return; // exit early
 const langs = pLang.querySelectorAll("div > ul > li");
+
+// Remember the first <li> so we can easily insert other nodes before it later.
 let first = langs[0];
 const ul = first.parentNode;
 
+// Build a sparse array that will hold the DOM nodes for each preferred language,
+// indexed by their priority in the myLangs list.
 const found = [];
 for (let i = 0; i < langs.length; i++) {
     const lncn = langs[i].className;
@@ -47,6 +52,8 @@ for (let i = 0; i < langs.length; i++) {
     }
 }
 
+// Traverse the 'found' array backwards so languages earlier in 'myLangs'
+// end up closest to the top of the list.
 let foundCount = 0;
 for (let i = found.length - 1; i >= 0; i--){
     if (found[i]) {
@@ -56,6 +63,8 @@ for (let i = found.length - 1; i >= 0; i--){
     }
 }
 
+// If 'removeOthers' is true, prune any languages that weren't in 'myLangs';
+// otherwise, leave them in place.
 if (removeOthers) {
     if (foundCount == 0) {
         // remove "other languages" menu if empty
