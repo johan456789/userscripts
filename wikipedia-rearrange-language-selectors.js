@@ -5,21 +5,34 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.1.2
+// @version        1.1.3
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
 
 // 2025-06-26 modified from https://greasyfork.org/en/scripts/10731-wikipedia-rearrange-other-languages
 
-// set your languages here
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Configuration
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Set your preferred languages here in order of priority
+ * @type {string[]}
+ */
 const myLangs = ["en", "simple", "zh", "ja", "es", "fr", "ar", "ru"];
-// setting false will leave other languages in the list
+
+/**
+ * Setting false will leave other languages in the list
+ * @type {boolean}
+ */
 const removeOthers = true;
 
-const plang = window.document.querySelector("div#p-lang");
-if (plang == null) return;
-const langs = plang.querySelectorAll("div > ul > li");
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+const pLang = window.document.querySelector("div#p-lang");
+if (pLang == null) return;
+const langs = pLang.querySelectorAll("div > ul > li");
 let first = langs[0];
 const ul = first.parentNode;
 
@@ -34,22 +47,22 @@ for (let i = 0; i < langs.length; i++) {
     }
 }
 
-let foundcount = 0;
+let foundCount = 0;
 for (let i = found.length - 1; i >= 0; i--){
     if (found[i]) {
         ul.insertBefore(found[i], first);
         first = found[i];
-        foundcount++;
+        foundCount++;
     }
 }
 
 if (removeOthers) {
-    if (foundcount == 0) {
+    if (foundCount == 0) {
         // remove "other languages" menu if empty
-        plang.parentNode.removeChild(plang);
+        pLang.parentNode.removeChild(pLang);
     } else {
-        while(ul.children.length > foundcount) {
-            ul.removeChild(ul.children[foundcount]);
+        while(ul.children.length > foundCount) {
+            ul.removeChild(ul.children[foundCount]);
         }
     }
 }
