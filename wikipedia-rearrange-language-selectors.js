@@ -4,7 +4,7 @@
 // @include        http://*.wikipedia.org/wiki/*
 // @include        https://*.wikipedia.org/wiki/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.1
+// @version        1.1.1
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
@@ -12,29 +12,29 @@
 // 2025-06-26 modified from https://greasyfork.org/en/scripts/10731-wikipedia-rearrange-other-languages
 
 // set your languages here
-var myLangs = ["en", "simple", "zh", "ja"];
+const myLangs = ["en", "simple", "zh", "ja"];
 // setting false will leave other languages in the list
-var removeOthers = false;
+const removeOthers = false;
 
-var plang = window.document.querySelector("div#p-lang");
+const plang = window.document.querySelector("div#p-lang");
 if (plang == null) return;
-var langs = plang.querySelectorAll("div > ul > li");
-var first = langs[0];
-var ul = first.parentNode;
+const langs = plang.querySelectorAll("div > ul > li");
+let first = langs[0];
+const ul = first.parentNode;
 
-var found = [];
-for (var i = 0; i < langs.length; i++) {
-    var lncn = langs[i].className;
-    var l1 = lncn.replace(/^.*interwiki-(\S+).*$/, "$1");
+const found = [];
+for (let i = 0; i < langs.length; i++) {
+    const lncn = langs[i].className;
+    const l1 = lncn.replace(/^.*interwiki-(\S+).*$/, "$1");
 
-    var ln = myLangs.indexOf(l1);
+    const ln = myLangs.indexOf(l1);
     if (ln > -1) {
         found[ln] = langs[i];
     }
 }
 
-var foundcount = 0;
-for (var i = found.length - 1; i >= 0; i--){
+let foundcount = 0;
+for (let i = found.length - 1; i >= 0; i--){
     if (found[i]) {
         ul.insertBefore(found[i], first);
         first = found[i];
