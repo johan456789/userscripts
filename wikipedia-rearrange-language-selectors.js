@@ -3,8 +3,9 @@
 // @namespace      none
 // @include        http://*.wikipedia.org/wiki/*
 // @include        https://*.wikipedia.org/wiki/*
+// @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.1.1
+// @version        1.1.2
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
@@ -12,9 +13,9 @@
 // 2025-06-26 modified from https://greasyfork.org/en/scripts/10731-wikipedia-rearrange-other-languages
 
 // set your languages here
-const myLangs = ["en", "simple", "zh", "ja"];
+const myLangs = ["en", "simple", "zh", "ja", "es", "fr", "ar", "ru"];
 // setting false will leave other languages in the list
-const removeOthers = false;
+const removeOthers = true;
 
 const plang = window.document.querySelector("div#p-lang");
 if (plang == null) return;
