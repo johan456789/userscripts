@@ -6,8 +6,8 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.2.1
-// @require      https://gist.github.com/johan456789/0493c123c1b9182cf546e5e49dbb8067/raw/gistfile1.txt
+// @version      2.2.2
+// @require      https://gist.github.com/johan456789/89c50735911afb7251c3a6a3d06f5657/raw/gistfile1.txt
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // ==/UserScript==
