@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Threads One-Click Not Interested
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Adds a "Not Interested" button to Threads.net posts for one-click action.
 // @author       You
 // @match        https://www.threads.net/*
 // @match        https://www.threads.com/*
 // @grant        none
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/retry.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/threads-one-click-no-interest.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/threads-one-click-no-interest.js
 // ==/UserScript==
@@ -48,26 +49,23 @@
 
             overflowBtn.click();
 
-            // 2. wait for the overflow menu to appear then click "Not interested"
-            waitForElement('div[role="menu"] div[role="button"]', (menuItem) => {
-                const menu = menuItem.closest('div[role="menu"]');
-                if (!menu) {
-                    logger('Could not find parent menu.');
-                    return;
-                }
-                const menuItems = menu.querySelectorAll('div[role="button"], span');
-                let found = false;
-                for (const item of menuItems) {
-                    if (item.textContent.trim() === 'Not interested') {
-                        logger('Found "Not interested" menu item, clicking.');
-                        item.click();
-                        found = true;
-                        return;
+            // 2. wait for buttons in the overflow menu to appear then click "Not interested"
+            const menuItemSelector = 'div[role="menu"] div[role="button"], div[role="menu"] span';
+            waitForElement(menuItemSelector, () => {
+                retry(() => {
+                    const menuItems = document.querySelectorAll(menuItemSelector);
+                    
+                    for (const item of menuItems) {
+                        if (item.textContent.trim() === 'Not interested') {
+                            logger('Found "Not interested" menu item, clicking.');
+                            item.click();
+                            return true; // Success
+                        }
                     }
-                }
-                if (!found) {
+                    
                     logger('Could not find "Not interested" menu item.');
-                }
+                    return false; // Failed, will retry
+                }, 5, 100, logger);
             });
         }
 
