@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cursor Usage Color Warning
 // @namespace    http://tampermonkey.net/
-// @version      0.4.3
+// @version      0.5.0
 // @description  Modifies the usage bar color on cursor.com/dashboard based on prorated usage.
 // @author       You
 // @match        https://www.cursor.com/dashboard
@@ -163,6 +163,40 @@
             return;
         }
         debugPrint('info', 'Usage bar element found:', barElement);
+
+        // --- Prorated Usage Indicator ---
+        const indicatorId = 'prorated-usage-indicator';
+        let indicator = barElementContainer.querySelector(`#${indicatorId}`);
+
+        // Ensure parent is ready for absolute positioning
+        if (window.getComputedStyle(barElementContainer).position === 'static') {
+            barElementContainer.style.position = 'relative';
+            debugPrint('info', 'Set bar container position to relative.');
+        }
+
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = indicatorId;
+            indicator.style.position = 'absolute';
+            indicator.style.height = '150%'; // Make it slightly taller than the bar
+            indicator.style.width = '2px';
+            indicator.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+            indicator.style.borderRadius = '1px'; // Soften edges
+            indicator.style.zIndex = '10';
+            indicator.style.top = '50%';
+            indicator.style.transform = 'translateY(calc(-50% + 1px))'; // Nudge down 1px to visually center with the bar
+            indicator.style.boxShadow = '0 0 3px rgba(0, 0, 0, 0.6)';
+            indicator.style.pointerEvents = 'none'; // Don't interfere with mouse events
+            barElementContainer.appendChild(indicator);
+            debugPrint('info', 'Created prorated usage indicator.');
+        }
+
+        const indicatorPosition = `${(proratedRatio * 100).toFixed(2)}%`;
+        if (indicator.style.left !== indicatorPosition) {
+            indicator.style.left = indicatorPosition;
+            debugPrint('info', 'Updated prorated usage indicator position to:', indicatorPosition);
+        }
+        // --- End Prorated Usage Indicator ---
 
         const difference = actualUsageRatio - proratedRatio;
         let newColor = "";
