@@ -1,3 +1,13 @@
+/**
+ * Waits for a DOM element matching `selector` to appear, then invokes `callback`
+ * with the found element. If the element already exists, calls immediately. If not
+ * found within `timeout`, stops observing and logs an error.
+ *
+ * @param {string} selector - CSS selector to watch for.
+ * @param {(el: Element) => void} callback - Invoked with the matched element when found.
+ * @param {number} [timeout=5000] - Maximum time in milliseconds to wait.
+ * @returns {void}
+ */
 function waitForElement(selector, callback, timeout = 5000) {
     // Check if element already exists
     const existing = document.querySelector(selector);
