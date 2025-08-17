@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Remove Discover More Feed
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Hide the irrelevant "Discover more" feed and everything after it in comment threads.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -31,7 +31,7 @@ logger("Userscript started.");
         const spans = cell.querySelectorAll('span');
         for (const span of spans) {
             const text = span.textContent || '';
-            if (text.trim().toLowerCase().includes(DISCOVER_TEXT)) {
+            if (text.trim().toLowerCase() === DISCOVER_TEXT) {
                 return true;
             }
         }
