@@ -16,7 +16,7 @@
 (function() {
     'use strict';
 
-    const textAreaSelector = '#cnt > div.QGG6Id.YNk70c.YzCcne > div:nth-child(2) > section > div > div > div > div.WzWwpc > div.y4VEUd > div > div.AgWCw > div.esoFne > div > textarea';
+    const textAreaSelector = '#cnt textarea';
     const textarea = document.querySelector(textAreaSelector);
 
     function focusTextarea() {
