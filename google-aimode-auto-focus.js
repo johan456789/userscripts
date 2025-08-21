@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Focus on TextBox in Google Search AI Mode (udm=50)
 // @namespace    https://greasyfork.org/en/users/688917
-// @version      1.1.1
+// @version      1.1.2
 // @description  Automatically focuses on the textarea when the page loads.
 // @author       You
 // @match        https://www.google.com/search?udm=50*
@@ -15,9 +15,17 @@
 
 (function() {
     'use strict';
+    function logger(message) {
+        console.log("[Google-AI-Mode-Auto-Focus] " + message);
+    }
+    logger('Script started');
 
     const textAreaSelector = '#cnt textarea';
     const textarea = document.querySelector(textAreaSelector);
+    if (!textarea) {
+        logger('Textarea not found. Exiting.');
+        return;
+    }
 
     function focusTextarea() {
         if (textarea) {
@@ -33,10 +41,12 @@
 
     // Detect user typing and auto-focus the textarea
     document.addEventListener('keydown', (event) => {
+        logger('Keydown detected.');
         if (event.ctrlKey || event.metaKey) {
             return; // Ignore shortcuts like Ctrl+C, Ctrl+V, Cmd+C, etc.
         }
         if (document.activeElement !== textarea) {
+            logger('Textarea not focused. Focusing.');
             focusTextarea();
         }
     });
