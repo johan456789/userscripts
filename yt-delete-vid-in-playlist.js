@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name      Youtube button to delete a video from a playlist
 // @namespace    http://tampermonkey.net/
-// @version      2.2.4
+// @version      2.2.5
 // @description  Adds a button to directly remove videos from the playlist on YouTube
 // @author       You
 // @match        https://www.youtube.com/*
@@ -141,9 +141,11 @@ async function getCurrentUserName() {
 async function checkPlaylistEditable() {
     try {
         logger('running checkPlaylistEditable');
-        // Case 1: Check if URL contains list=WL (Watch Later playlist) or list=ll (liked video)
-        if (window.location.search.includes('list=WL') || window.location.search.includes('list=LL')) {
+        // Check special playlists
+        if (window.location.search.includes('list=WL')) { // Watch Later playlist
             return true;
+        } else if (window.location.search.includes('list=LL')) { // Liked videos
+            return false; // I don't see why I would remove liked videos so I'm disabling this.
         }
 
         const currentUserName = await getCurrentUserName();
