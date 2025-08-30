@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.2
+// @version      2.3.3
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://gist.github.com/johan456789/89c50735911afb7251c3a6a3d06f5657/raw/gistfile1.txt
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -15,7 +15,7 @@
 
 // ---- Constants (reused across multiple places) ----
 const IDS = { transcriptButton: "transcript-button" };
-const SELECTORS = { topButtons: "#menu #top-level-buttons-computed" };
+const SELECTORS = { topButtons: "#top-row #actions #menu #top-level-buttons-computed" };
 const CLASSES = { buttonTextContent: "yt-spec-button-shape-next__button-text-content" };
 const TAGS = { wrapper: "yt-button-view-model" };
 const ICONS = { maskId: "copy-mask" };
