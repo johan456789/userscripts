@@ -7,6 +7,7 @@
 // @run-at       document-end
 // @noframes
 // @version      2.3.2
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://gist.github.com/johan456789/89c50735911afb7251c3a6a3d06f5657/raw/gistfile1.txt
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -19,9 +20,7 @@ const CLASSES = { buttonTextContent: "yt-spec-button-shape-next__button-text-con
 const TAGS = { wrapper: "yt-button-view-model" };
 const ICONS = { maskId: "copy-mask" };
 
-function logger(message) {
-    console.log("[YT-transcript] " + message);
-}
+const logger = Logger('[YT-transcript]');
 
 logger("Userscript started.");
 let transcriptCache = new Map();
@@ -66,12 +65,12 @@ const cssText = `
 
     function updateButtonAppearance(button, availability) {
         if (!button) {
-            console.error('[YT-transcript] Button is null/undefined');
+            logger.error('Button is null/undefined');
             return;
         }
         const buttonTextDiv = button.querySelector(`.${CLASSES.buttonTextContent}`);
         if (!buttonTextDiv) {
-            console.error('[YT-transcript] Button text container not found');
+            logger.error('Button text container not found');
             return;
         }
 
@@ -275,7 +274,7 @@ const cssText = `
                     buttonTextDiv.replaceChildren(createCopySvgIcon());
                 }, 1500);
             } catch (error) {
-                console.error("[YT-transcript] Error copying transcript to clipboard using GM_setClipboard:", error);
+                logger.error("Error copying transcript to clipboard using GM_setClipboard:", error);
             }
         };
         button.addEventListener("click", btnClickHandler);
