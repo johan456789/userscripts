@@ -326,9 +326,11 @@ const cssText = `
                     let fullTranscript;
                     if (!transcriptCache.has(videoId)) {
                         fullTranscript = await prefetchTranscript(videoId);
-                        logger("pageRefreshHandler: fullTranscript", fullTranscript);
                         if (fullTranscript) {
                             transcriptCache.set(videoId, fullTranscript);
+                            logger("pageRefreshHandler: fetched transcript and cached");
+                        } else {
+                            logger("pageRefreshHandler: failed to fetch transcript");
                         }
                     } else {
                         logger("pageRefreshHandler: transcript already cached");
