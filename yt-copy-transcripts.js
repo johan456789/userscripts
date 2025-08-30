@@ -214,12 +214,12 @@ const cssText = `
     }
 
     function addTranscriptButton() {
-        let query = "#owner:not(.copy-panel)";
-        const owner = document.querySelector(query);
+        const topButtons = document.querySelector("#menu #top-level-buttons-computed");
+        if (!topButtons) {
+            logger("#menu #top-level-buttons-computed not found");
+            return null;
+        }
 
-        // if (elements.length == 0) {
-        //     console.error("[YT-transcript] element not found");
-        // }
         const outerContainer = document.createElement("div");
         outerContainer.id = "transcript-button";
         outerContainer.classList.add("style-scope", "ytd-video-owner-renderer", "copy-panel");
@@ -270,13 +270,26 @@ const cssText = `
             } catch (error) {
                 console.error("[YT-transcript] Error copying transcript to clipboard using GM_setClipboard:", error);
             }
-        }
+        };
         button.addEventListener("click", btnClickHandler);
         container.appendChild(button);
         outerContainer.appendChild(container);
 
-        owner.classList.add("copy-panel");
-        owner.insertBefore(outerContainer, owner.lastElementChild.nextElementSibling); // most likely after the subscribe button
+        // Outer wrapper element per YouTube's structure
+        const wrapper = document.createElement("yt-button-view-model");
+        wrapper.classList.add("ytd-menu-renderer");
+        wrapper.appendChild(outerContainer);
+
+        // Insert after the last yt-button-view-model within #top-level-buttons-computed
+        let insertAfter = null;
+        for (let el = topButtons.lastElementChild; el; el = el.previousElementSibling) {
+            if (el.tagName && el.tagName.toLowerCase() === "yt-button-view-model") {
+                insertAfter = el;
+                break;
+            }
+        }
+        const referenceNode = insertAfter ? insertAfter.nextSibling : null;
+        topButtons.insertBefore(wrapper, referenceNode);
 
         logger(`Transcript button created`);
         return button;
@@ -293,8 +306,9 @@ const cssText = `
         // observe element load
         const observer = new MutationObserver(async (mutations, observer) => {
             logger("Observer callback fired");
-            const owner = document.querySelector("#owner");
-            if (owner) {
+            const topButtons = document.querySelector("#menu #top-level-buttons-computed");
+            const alreadyExists = document.getElementById("transcript-button");
+            if (topButtons && !alreadyExists) {
                 observer.disconnect();
                 const button = addTranscriptButton();
 
