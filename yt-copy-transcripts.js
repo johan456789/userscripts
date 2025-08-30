@@ -91,7 +91,7 @@ const cssText = `
         return videoId;
     }
 
-    function createCopySvgIcon() {
+    function createCopySvgIcon(variant = "lines") {
         const svgns = "http://www.w3.org/2000/svg";
         const svg = document.createElementNS(svgns, "svg");
         svg.setAttribute("viewBox", "0 0 24 24");
@@ -150,29 +150,51 @@ const cssText = `
         front.setAttribute("stroke", "currentColor");
         front.setAttribute("stroke-width", "2");
 
-        const line1 = document.createElementNS(svgns, "line");
-        line1.setAttribute("x1", String(frontX + 3));
-        line1.setAttribute("y1", String(frontY + 4));
-        line1.setAttribute("x2", String(frontX + 9));
-        line1.setAttribute("y2", String(frontY + 4));
-        line1.setAttribute("stroke", "currentColor");
-        line1.setAttribute("stroke-width", "2");
-        line1.setAttribute("stroke-linecap", "round");
-
-        const line2 = document.createElementNS(svgns, "line");
-        line2.setAttribute("x1", String(frontX + 3));
-        line2.setAttribute("y1", String(frontY + 7));
-        line2.setAttribute("x2", String(frontX + 7));
-        line2.setAttribute("y2", String(frontY + 7));
-        line2.setAttribute("stroke", "currentColor");
-        line2.setAttribute("stroke-width", "2");
-        line2.setAttribute("stroke-linecap", "round");
-
         svg.appendChild(back);
         svg.appendChild(front);
-        svg.appendChild(line1);
-        svg.appendChild(line2);
+
+        if (variant === "check") {
+            const check = document.createElementNS(svgns, "path");
+            const pad = 3;
+            const p1x = frontX + pad + 0.5;
+            const p1y = frontY + pad + 4;
+            const p2x = frontX + pad + 3;
+            const p2y = frontY + pad + 6.5;
+            const p3x = frontX + frontW - pad - 0.5;
+            const p3y = frontY + pad + 1.5;
+            check.setAttribute("d", `M ${p1x} ${p1y} L ${p2x} ${p2y} L ${p3x} ${p3y}`);
+            check.setAttribute("fill", "none");
+            check.setAttribute("stroke", "currentColor");
+            check.setAttribute("stroke-width", "2");
+            check.setAttribute("stroke-linecap", "round");
+            check.setAttribute("stroke-linejoin", "round");
+            svg.appendChild(check);
+        } else {
+            const line1 = document.createElementNS(svgns, "line");
+            line1.setAttribute("x1", String(frontX + 3));
+            line1.setAttribute("y1", String(frontY + 4));
+            line1.setAttribute("x2", String(frontX + 9));
+            line1.setAttribute("y2", String(frontY + 4));
+            line1.setAttribute("stroke", "currentColor");
+            line1.setAttribute("stroke-width", "2");
+            line1.setAttribute("stroke-linecap", "round");
+
+            const line2 = document.createElementNS(svgns, "line");
+            line2.setAttribute("x1", String(frontX + 3));
+            line2.setAttribute("y1", String(frontY + 7));
+            line2.setAttribute("x2", String(frontX + 7));
+            line2.setAttribute("y2", String(frontY + 7));
+            line2.setAttribute("stroke", "currentColor");
+            line2.setAttribute("stroke-width", "2");
+            line2.setAttribute("stroke-linecap", "round");
+            svg.appendChild(line1);
+            svg.appendChild(line2);
+        }
         return svg;
+    }
+
+    function createCopySuccessSvgIcon() {
+        return createCopySvgIcon("check");
     }
 
     function addTranscriptButton() {
@@ -224,6 +246,11 @@ const cssText = `
             try {
                 GM_setClipboard(transcript);
                 logger("Transcript copied to clipboard using GM_setClipboard!");
+                // swap icon to success state and briefly show it
+                buttonTextDiv.replaceChildren(createCopySuccessSvgIcon());
+                setTimeout(() => {
+                    buttonTextDiv.replaceChildren(createCopySvgIcon());
+                }, 1500);
             } catch (error) {
                 console.error("[YT-transcript] Error copying transcript to clipboard using GM_setClipboard:", error);
             }
