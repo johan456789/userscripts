@@ -10,3 +10,4 @@ This repo is a collection of userscripts for various websites.
 - Utility functions should be in the `utils` folder.
   - Each utility function should be in a separate file.
 - Naming convention for userscripts: `<website_name>-<userscript_name>.js`
+- Edit only one userscript only unless explicitly stated otherwise.
