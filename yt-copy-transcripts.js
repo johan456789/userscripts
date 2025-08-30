@@ -6,37 +6,11 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.0
+// @version      2.3.1
 // @require      https://gist.github.com/johan456789/89c50735911afb7251c3a6a3d06f5657/raw/gistfile1.txt
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // ==/UserScript==
-
-// 2024-03-25 v1.2 edited from https://greasyfork.org/en/scripts/468715-youtube-script-downloader-button
-// TODO 1: move the button to a better place
-
-// 2024-07-17 v1.3
-// DONE: prefetch transcript. if no transcript show grayed out button, if yes transcript show normal button.
-// TODO 1: use a better spacing between neighboring buttons
-
-// 2024-08-08 v1.4
-// DONE: fix "Trusted Type expected, but String received" by using a textNode instead of replacing innerHTML with a string
-
-// 2024-12-09 v2.0
-// DONE: fix: button not being added to the page at first load
-// DONE: fix: transcript and button class not being updated after a page navigation
-// DONE: refactor: remove redundant loops
-// TODO 1: check if the button and its parent elements can be simplified
-
-// 2025-03-24 v2.1
-// DONE: make button not clickable when transcript is not available
-// DONE: make button text not selectable
-// DONE: create a logger function
-// DONE: fix: when left clicking the video from channel page, the button doesn't load
-// DONE: use the same hover and click effect as native buttons
-// DONE: observer doesn't work at all
-// TODO 1: fix: styling when transcript is unavailable is off because of conflict with yt official css rules
-// TODO 2: the css rule when the button is clicked is still off. dunno why
 
 function logger(message) {
     console.log("[YT-transcript] " + message);
