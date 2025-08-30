@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.1
+// @version      2.3.2
 // @require      https://gist.github.com/johan456789/89c50735911afb7251c3a6a3d06f5657/raw/gistfile1.txt
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -57,11 +57,27 @@ const cssText = `
         return "";
     }
 
-    function updateButtonAppearance(button, isAvailable) {
+    function updateButtonAppearance(button, availability) {
         if (!button) {
             console.error('[YT-transcript] Button is null/undefined');
+            return;
         }
+        const buttonTextDiv = button.querySelector('.yt-spec-button-shape-next__button-text-content');
+        if (!buttonTextDiv) {
+            console.error('[YT-transcript] Button text container not found');
+            return;
+        }
+
+        // availability: true (available), false (unavailable), null (loading)
+        if (availability === null) {
+            button.disabled = true;
+            buttonTextDiv.textContent = "...";
+            return;
+        }
+
+        const isAvailable = Boolean(availability);
         button.toggleAttribute('disabled', !isAvailable);
+        buttonTextDiv.replaceChildren(createCopySvgIcon());
     }
 
     function decodeHtmlEntities(str) {
@@ -217,9 +233,9 @@ const cssText = `
 
         const buttonTextDiv = document.createElement("div");
         buttonTextDiv.classList.add("yt-spec-button-shape-next__button-text-content");
-        buttonTextDiv.textContent = "";
-        buttonTextDiv.appendChild(createCopySvgIcon());
         button.appendChild(buttonTextDiv);
+        // initialize as loading state
+        updateButtonAppearance(button, null);
 
         const touchFeedback = document.createElement("yt-touch-feedback-shape");
         touchFeedback.style.borderRadius = "inherit";
@@ -285,6 +301,8 @@ const cssText = `
                 const pageRefreshHandler = async () => {
                     const videoId = getVideoId();
                     logger(`updating transcript (in cache: ${transcriptCache.has(videoId)})`);
+                    // Set loading state while checking availability
+                    updateButtonAppearance(button, null);
                     let fullTranscript;
                     if (!transcriptCache.has(videoId)) {
                         fullTranscript = await prefetchTranscript(videoId);
@@ -295,7 +313,8 @@ const cssText = `
                     } else {
                         logger("pageRefreshHandler: transcript already cached");
                     }
-                    updateButtonAppearance(button, transcriptCache.has(videoId));
+                    const isAvailable = transcriptCache.has(videoId);
+                    updateButtonAppearance(button, isAvailable);
                     logger("pageRefreshHandler: finished updating transcript");
                 }
                 await pageRefreshHandler();
