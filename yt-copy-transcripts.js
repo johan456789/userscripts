@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.2.2
+// @version      2.3.0
 // @require      https://gist.github.com/johan456789/89c50735911afb7251c3a6a3d06f5657/raw/gistfile1.txt
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -46,38 +46,13 @@ logger("Userscript started.");
 let transcriptCache = new Map();
 
 const ytBtnClassList = `yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono \
-yt-spec-button-shape-next--size-m yt-spec-button-shape-next--icon-leading-trailing`.split(" ").filter(Boolean);
+yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-filter-experiment`.split(" ").filter(Boolean);
 
 const cssText = `
-    .copy-button {
-        border-radius: 20px;
-        display: flex;
-        flex-direction: row;
-        cursor: pointer;
-        background-color: var(--yt-spec-10-percent-layer);
-        padding: var(--yt-button-padding);
-        margin: auto var(--ytd-subscribe-button-margin, 12px);
-        white-space: nowrap;
-        font-size: var(--ytd-tab-system-font-size, 1.4rem);
-        font-weight: var(--ytd-tab-system-font-weight, 500);
-        letter-spacing: var(--ytd-tab-system-letter-spacing, .007px);
-        user-select: none; /* Prevent text selection */
-    }
-    .copy-button-text {
-        --yt-formatted-string-deemphasize_-_display: initial;
-        --yt-formatted-string-deemphasize_-_margin-left: 4px;
-    }
-    .copy-button-container {
-        display: flex;
-        flex-direction: row;
-    }
-    .transcript-available {
-        color: var(--yt-spec-text-primary);
-    }
-    .transcript-unavailable {
-        color: var(--yt-spec-text-secondary);
-        pointer-events: none;
-    }
+#transcript-button button.yt-spec-button-shape-next[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 `;
 
 (function () {
@@ -101,11 +76,7 @@ const cssText = `
         if (!button) {
             console.error('[YT-transcript] Button is null/undefined');
         }
-        button.classList.remove('transcript-available', 'transcript-unavailable');
-        // if (!isAvailable) {
-        //     button.classList.remove(...ytBtnClassList);
-        // }
-        button.classList.add(isAvailable ? 'transcript-available' : 'transcript-unavailable');
+        button.toggleAttribute('disabled', !isAvailable);
     }
 
     function decodeHtmlEntities(str) {
@@ -149,15 +120,27 @@ const cssText = `
         const container = document.createElement("div");
         container.classList.add("copy-button-container");
 
-        const button = document.createElement("div");
-        button.classList.add("copy-button", "transcript-unavailable");  // set to unavailable by default
-        // button.classList.add(...ytBtnClassList); // use YT default styles
+        const button = document.createElement("button");
+        button.classList.add(...ytBtnClassList);
+        button.disabled = true;
 
-        const buttonText = document.createElement("span");
-        buttonText.classList.add("copy-button-text");
-        buttonText.textContent = "T";
-        buttonText.title = "Copy Transcript";
-        button.appendChild(buttonText);
+        const buttonTextDiv = document.createElement("div");
+        buttonTextDiv.classList.add("yt-spec-button-shape-next__button-text-content");
+        buttonTextDiv.textContent = "T";
+        button.appendChild(buttonTextDiv);
+
+        const touchFeedback = document.createElement("yt-touch-feedback-shape");
+        touchFeedback.style.borderRadius = "inherit";
+        const feedbackContainer = document.createElement("div");
+        feedbackContainer.className = "yt-spec-touch-feedback-shape yt-spec-touch-feedback-shape--touch-response";
+        const stroke = document.createElement("div");
+        stroke.className = "yt-spec-touch-feedback-shape__stroke";
+        const fill = document.createElement("div");
+        fill.className = "yt-spec-touch-feedback-shape__fill";
+        feedbackContainer.appendChild(stroke);
+        feedbackContainer.appendChild(fill);
+        touchFeedback.appendChild(feedbackContainer);
+        button.appendChild(touchFeedback);
 
         const btnClickHandler = async () => {
             // copy transcript to clipboard
