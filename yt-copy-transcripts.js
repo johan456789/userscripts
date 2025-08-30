@@ -27,6 +27,17 @@ const cssText = `
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Center icon within YouTube button text container */
+#transcript-button .yt-spec-button-shape-next__button-text-content {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#transcript-button .yt-spec-button-shape-next__button-text-content svg {
+    display: block;
+}
 `;
 
 (function () {
@@ -80,6 +91,90 @@ const cssText = `
         return videoId;
     }
 
+    function createCopySvgIcon() {
+        const svgns = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgns, "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("width", "20");
+        svg.setAttribute("height", "20");
+        svg.setAttribute("aria-hidden", "true");
+        svg.setAttribute("focusable", "false");
+
+        // Layout constants
+        const frontX = 5, frontY = 7, frontW = 12, frontH = 14, radius = 2;
+        const backX = 9, backY = 3, backW = 12, backH = 14;
+
+        // Mask so the back card does not show through the front card
+        const defs = document.createElementNS(svgns, "defs");
+        const mask = document.createElementNS(svgns, "mask");
+        mask.setAttribute("id", "copy-mask");
+        mask.setAttribute("maskUnits", "userSpaceOnUse");
+        const maskBg = document.createElementNS(svgns, "rect");
+        maskBg.setAttribute("x", "0");
+        maskBg.setAttribute("y", "0");
+        maskBg.setAttribute("width", "24");
+        maskBg.setAttribute("height", "24");
+        maskBg.setAttribute("fill", "white");
+        const maskCut = document.createElementNS(svgns, "rect");
+        // Slightly expand cutout to cover the stroke of the front card
+        maskCut.setAttribute("x", String(frontX - 2));
+        maskCut.setAttribute("y", String(frontY - 2));
+        maskCut.setAttribute("width", String(frontW + 4));
+        maskCut.setAttribute("height", String(frontH + 4));
+        maskCut.setAttribute("rx", String(radius + 1));
+        maskCut.setAttribute("fill", "black");
+        mask.appendChild(maskBg);
+        mask.appendChild(maskCut);
+        defs.appendChild(mask);
+        svg.appendChild(defs);
+
+        const back = document.createElementNS(svgns, "rect");
+        back.setAttribute("x", String(backX));
+        back.setAttribute("y", String(backY));
+        back.setAttribute("width", String(backW));
+        back.setAttribute("height", String(backH));
+        back.setAttribute("rx", String(radius));
+        back.setAttribute("fill", "none");
+        back.setAttribute("stroke", "currentColor");
+        back.setAttribute("stroke-width", "2");
+        back.setAttribute("opacity", "0.6");
+        back.setAttribute("mask", "url(#copy-mask)");
+
+        const front = document.createElementNS(svgns, "rect");
+        front.setAttribute("x", String(frontX));
+        front.setAttribute("y", String(frontY));
+        front.setAttribute("width", String(frontW));
+        front.setAttribute("height", String(frontH));
+        front.setAttribute("rx", String(radius));
+        front.setAttribute("fill", "none");
+        front.setAttribute("stroke", "currentColor");
+        front.setAttribute("stroke-width", "2");
+
+        const line1 = document.createElementNS(svgns, "line");
+        line1.setAttribute("x1", String(frontX + 3));
+        line1.setAttribute("y1", String(frontY + 4));
+        line1.setAttribute("x2", String(frontX + 9));
+        line1.setAttribute("y2", String(frontY + 4));
+        line1.setAttribute("stroke", "currentColor");
+        line1.setAttribute("stroke-width", "2");
+        line1.setAttribute("stroke-linecap", "round");
+
+        const line2 = document.createElementNS(svgns, "line");
+        line2.setAttribute("x1", String(frontX + 3));
+        line2.setAttribute("y1", String(frontY + 7));
+        line2.setAttribute("x2", String(frontX + 7));
+        line2.setAttribute("y2", String(frontY + 7));
+        line2.setAttribute("stroke", "currentColor");
+        line2.setAttribute("stroke-width", "2");
+        line2.setAttribute("stroke-linecap", "round");
+
+        svg.appendChild(back);
+        svg.appendChild(front);
+        svg.appendChild(line1);
+        svg.appendChild(line2);
+        return svg;
+    }
+
     function addTranscriptButton() {
         let query = "#owner:not(.copy-panel)";
         const owner = document.querySelector(query);
@@ -100,7 +195,8 @@ const cssText = `
 
         const buttonTextDiv = document.createElement("div");
         buttonTextDiv.classList.add("yt-spec-button-shape-next__button-text-content");
-        buttonTextDiv.textContent = "T";
+        buttonTextDiv.textContent = "";
+        buttonTextDiv.appendChild(createCopySvgIcon());
         button.appendChild(buttonTextDiv);
 
         const touchFeedback = document.createElement("yt-touch-feedback-shape");
