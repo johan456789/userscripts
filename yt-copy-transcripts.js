@@ -12,6 +12,13 @@
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // ==/UserScript==
 
+// ---- Constants (reused across multiple places) ----
+const IDS = { transcriptButton: "transcript-button" };
+const SELECTORS = { topButtons: "#menu #top-level-buttons-computed" };
+const CLASSES = { buttonTextContent: "yt-spec-button-shape-next__button-text-content" };
+const TAGS = { wrapper: "yt-button-view-model" };
+const ICONS = { maskId: "copy-mask" };
+
 function logger(message) {
     console.log("[YT-transcript] " + message);
 }
@@ -23,19 +30,19 @@ const ytBtnClassList = `yt-spec-button-shape-next yt-spec-button-shape-next--ton
 yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-filter-experiment`.split(" ").filter(Boolean);
 
 const cssText = `
-#transcript-button button.yt-spec-button-shape-next[disabled] {
+#${IDS.transcriptButton} button.yt-spec-button-shape-next[disabled] {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
 /* Center icon within YouTube button text container */
-#transcript-button .yt-spec-button-shape-next__button-text-content {
+#${IDS.transcriptButton} .yt-spec-button-shape-next__button-text-content {
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-#transcript-button .yt-spec-button-shape-next__button-text-content svg {
+#${IDS.transcriptButton} .yt-spec-button-shape-next__button-text-content svg {
     display: block;
 }
 `;
@@ -62,7 +69,7 @@ const cssText = `
             console.error('[YT-transcript] Button is null/undefined');
             return;
         }
-        const buttonTextDiv = button.querySelector('.yt-spec-button-shape-next__button-text-content');
+        const buttonTextDiv = button.querySelector(`.${CLASSES.buttonTextContent}`);
         if (!buttonTextDiv) {
             console.error('[YT-transcript] Button text container not found');
             return;
@@ -123,7 +130,7 @@ const cssText = `
         // Mask so the back card does not show through the front card
         const defs = document.createElementNS(svgns, "defs");
         const mask = document.createElementNS(svgns, "mask");
-        mask.setAttribute("id", "copy-mask");
+        mask.setAttribute("id", ICONS.maskId);
         mask.setAttribute("maskUnits", "userSpaceOnUse");
         const maskBg = document.createElementNS(svgns, "rect");
         maskBg.setAttribute("x", "0");
@@ -154,7 +161,7 @@ const cssText = `
         back.setAttribute("stroke", "currentColor");
         back.setAttribute("stroke-width", "2");
         back.setAttribute("opacity", "0.6");
-        back.setAttribute("mask", "url(#copy-mask)");
+        back.setAttribute("mask", `url(#${ICONS.maskId})`);
 
         const front = document.createElementNS(svgns, "rect");
         front.setAttribute("x", String(frontX));
@@ -214,14 +221,14 @@ const cssText = `
     }
 
     function addTranscriptButton() {
-        const topButtons = document.querySelector("#menu #top-level-buttons-computed");
+        const topButtons = document.querySelector(SELECTORS.topButtons);
         if (!topButtons) {
-            logger("#menu #top-level-buttons-computed not found");
+            logger(SELECTORS.topButtons + " not found");
             return null;
         }
 
         const outerContainer = document.createElement("div");
-        outerContainer.id = "transcript-button";
+        outerContainer.id = IDS.transcriptButton;
         outerContainer.classList.add("style-scope", "ytd-video-owner-renderer", "copy-panel");
 
         const container = document.createElement("div");
@@ -232,7 +239,7 @@ const cssText = `
         button.disabled = true;
 
         const buttonTextDiv = document.createElement("div");
-        buttonTextDiv.classList.add("yt-spec-button-shape-next__button-text-content");
+        buttonTextDiv.classList.add(CLASSES.buttonTextContent);
         button.appendChild(buttonTextDiv);
         // initialize as loading state
         updateButtonAppearance(button, null);
@@ -276,14 +283,14 @@ const cssText = `
         outerContainer.appendChild(container);
 
         // Outer wrapper element per YouTube's structure
-        const wrapper = document.createElement("yt-button-view-model");
+        const wrapper = document.createElement(TAGS.wrapper);
         wrapper.classList.add("ytd-menu-renderer");
         wrapper.appendChild(outerContainer);
 
         // Insert after the last yt-button-view-model within #top-level-buttons-computed
         let insertAfter = null;
         for (let el = topButtons.lastElementChild; el; el = el.previousElementSibling) {
-            if (el.tagName && el.tagName.toLowerCase() === "yt-button-view-model") {
+            if (el.tagName && el.tagName.toLowerCase() === TAGS.wrapper) {
                 insertAfter = el;
                 break;
             }
@@ -306,8 +313,8 @@ const cssText = `
         // observe element load
         const observer = new MutationObserver(async (mutations, observer) => {
             logger("Observer callback fired");
-            const topButtons = document.querySelector("#menu #top-level-buttons-computed");
-            const alreadyExists = document.getElementById("transcript-button");
+            const topButtons = document.querySelector(SELECTORS.topButtons);
+            const alreadyExists = document.getElementById(IDS.transcriptButton);
             if (topButtons && !alreadyExists) {
                 observer.disconnect();
                 const button = addTranscriptButton();
@@ -333,7 +340,7 @@ const cssText = `
                 }
                 await pageRefreshHandler();
                 window.addEventListener("yt-navigate-finish", async () => {
-                    logger("[YT-transcript] yt-navigate-finish detected, updating transcript");
+                    logger("yt-navigate-finish detected, updating transcript");
                     await pageRefreshHandler();
                 });
             }
