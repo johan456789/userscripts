@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Unlock Right-Click & Text Selection
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Unlock right-click menu and text selection on unfriendly websites like pixnet.net
 // @author       You
 // @match        https://*.pixnet.net/*
 // @match        https://www.granitefirm.com/*
+// @match        https://blog.udn.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
