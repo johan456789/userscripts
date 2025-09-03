@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Maps Language Selector
 // @namespace    http://tampermonkey.net/
-// @version      1.1.0
+// @version      1.1.1
 // @description  Adds a language selector button to Google Maps.
 // @author       You
 // @match        https://www.google.com/maps*
@@ -151,6 +151,15 @@
         select.style.pointerEvents = 'none';
         select.style.zIndex = '2147483647';
 
+        // Placeholder option so no language is selected by default when no hl param is present
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.hidden = false;
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        placeholder.textContent = 'Select language';
+        select.appendChild(placeholder);
+
         // Populate options from ENABLED_LANGUAGES using LANGUAGE_CODE_TO_NAME
         ENABLED_LANGUAGES.forEach((code) => {
             const display = LANGUAGE_CODE_TO_NAME[code] || code;
@@ -202,13 +211,12 @@
             button.addEventListener('click', (event) => {
                 event.preventDefault();
                 try {
-                    // Preselect option based on current URL 'hl' param; clear if invalid or absent
+                    // Preselect option based on current URL 'hl' param; default to placeholder if absent/invalid
                     const currentHl = getCurrentHlParam();
                     if (currentHl && ENABLED_LANGUAGES.includes(currentHl)) {
                         select.value = currentHl;
                     } else {
-                        select.selectedIndex = -1;
-                        Array.from(select.options).forEach((opt) => { opt.selected = false; });
+                        select.value = '';
                     }
                     // Place the select over the button to avoid layout shift
                     const rect = button.getBoundingClientRect();
