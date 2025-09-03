@@ -1,6 +1,6 @@
 # Userscripts
 
-This repository contains my personal userscripts for various websites.
+This repository contains my personal userscripts for various websites. Most of them are vibe-coded.
 
 ## Folder structure
 
