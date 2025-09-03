@@ -8,6 +8,7 @@ This repo is a collection of userscripts for various websites.
 
 - Every userscript should be in a separate file.
 - Utility functions should be in the `utils` folder.
+  - All userscripts should use the logger from /utils.
   - Each utility function should be in a separate file.
 - Naming convention for userscripts: `<website_name>-<userscript_name>.js`
 - Edit only one userscript only unless explicitly stated otherwise.
