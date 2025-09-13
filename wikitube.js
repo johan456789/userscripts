@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.6.4
+// @version      3.6.5
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -35,14 +35,14 @@ $(document).ready(function () {
     }
 
     // pages of wikipedia which should disable Wikitube
-    const banned_paths = [
-        '/wiki/Main_Page',
+    const banned_titles = [
+        'Main_Page',
 		];
-    const banned_paths_prefix = [
-        '/wiki/Help:',
-        '/wiki/Wikipedia:',
-        '/wiki/User:',
-        '/wiki/Special:'
+    const banned_title_prefixes = [
+        'Help:',
+        'Wikipedia:',
+        'User:',
+        'Special:'
     ];
 
 	function addGlobalStyle(css) {
@@ -62,16 +62,22 @@ $(document).ready(function () {
 
 	const allow_path = function(path){
         console.log(path);
-        for (let i = 0; i < banned_paths_prefix.length; i++){
-			if(path.startsWith(banned_paths_prefix[i])){
-               return false;
+
+        // Check banned patterns for all language prefixes
+        const prefixes_to_check = ['/wiki/', ...wikipedia_lang_codes.map(lang => '/' + lang + '/')];
+
+        for (const prefix of prefixes_to_check) {
+            for (let i = 0; i < banned_title_prefixes.length; i++){
+                if(path.startsWith(prefix + banned_title_prefixes[i])){
+                   return false;
+                }
+            }
+            for (let i = 0; i < banned_titles.length; i++) {
+                if(path == prefix + banned_titles[i]){
+                    return false;
+                }
             }
         }
-		for (let i = 0; i < banned_paths.length; i++) {
-            if(path == banned_paths[i]){
-				return false;
-            }
-		}
 		return true;
 	}
 
@@ -210,3 +216,109 @@ $(document).ready(function () {
     }
 
 });
+
+// https://github.com/wikimedia/language-data/blob/master/data/langdb.yaml
+const wikipedia_lang_codes = [
+	'aa', 'aae', 'ab', 'abe', 'abr', 'abs', 'ace', 'acf', 'ach', 'acm',
+	'acq', 'ada', 'ady', 'ady-cyrl', 'ady-latn', 'aeb', 'aeb-arab',
+	'aeb-latn', 'af', 'agq', 'agr', 'ahr', 'aig', 'aii', 'ajg', 'ajp',
+	'ajp-arab', 'ajp-latn', 'akb', 'akz', 'ale', 'ale-cyrl', 'aln',
+	'als', 'alt', 'am', 'ami', 'an', 'ang', 'ann', 'anp', 'apc',
+	'apc-arab', 'apc-latn', 'apw', 'ar', 'arc', 'arn', 'aro', 'arq',
+	'ars', 'ary', 'ary-arab', 'ary-latn', 'arz', 'as', 'ase', 'ast',
+	'atj', 'atv', 'av', 'avk', 'awa', 'ay', 'ayh', 'az', 'az-arab',
+	'az-cyrl', 'az-latn', 'azb', 'azj', 'ba', 'ban', 'ban-bali',
+	'bar', 'bas', 'bat-smg', 'bax', 'bax-bamu', 'bbc', 'bbc-batk',
+	'bbc-latn', 'bcc', 'bci', 'bcl', 'bdr', 'be', 'be-tarask',
+	'be-x-old', 'bem', 'bew', 'bfa', 'bfq', 'bft', 'bfw', 'bg',
+	'bgc', 'bgc-arab', 'bgn', 'bh', 'bho', 'bi', 'bin', 'bjn', 'bkm',
+	'blc', 'blk', 'bm', 'bn', 'bnn', 'bo', 'bol', 'bom', 'bpy',
+	'bqi', 'br', 'brh', 'brx', 'bs', 'btd', 'btm', 'bto', 'bts',
+	'btx', 'btz', 'bug', 'bug-bugi', 'bug-latn', 'bum', 'bwr', 'bxr',
+	'byn', 'byv', 'bzj', 'bzs', 'ca', 'cak', 'cbk', 'cbk-zam', 'ccp',
+	'cdo', 'cdo-hani', 'cdo-hans', 'cdo-hant', 'cdo-latn', 'ce',
+	'ceb', 'ch', 'chm', 'chn', 'cho', 'chr', 'chy', 'ciw', 'cja',
+	'cja-arab', 'cja-cham', 'cja-latn', 'cjk', 'cjm', 'cjm-arab',
+	'cjm-cham', 'cjm-latn', 'cjy', 'cjy-hans', 'cjy-hant', 'ckb',
+	'cko', 'ckt', 'ckv', 'cnh', 'cnr', 'cnr-cyrl', 'cnr-latn', 'co',
+	'cop', 'cps', 'cpx', 'cpx-hans', 'cpx-hant', 'cpx-latn', 'cr',
+	'cr-cans', 'cr-latn', 'crg', 'crh', 'crh-cyrl', 'crh-latn',
+	'crh-ro', 'cs', 'csb', 'cu', 'cv', 'cy', 'da', 'dag', 'dar',
+	'ddn', 'de', 'de-at', 'de-ch', 'de-formal', 'dga', 'dik', 'din',
+	'diq', 'dlg', 'doi', 'dru', 'dsb', 'dso', 'dtp', 'dty', 'dua',
+	'dv', 'dyu', 'dz', 'ee', 'efi', 'egl', 'ekp', 'el', 'elm', 'eml',
+	'en', 'en-ca', 'en-gb', 'en-simple', 'en-us', 'eo', 'es',
+	'es-419', 'es-formal', 'es-ni', 'esu', 'et', 'eu', 'ext', 'eya',
+	'fa', 'fan', 'fat', 'fax', 'ff', 'fi', 'fil', 'fit', 'fiu-vro',
+	'fj', 'fkv', 'fo', 'fon', 'fr', 'frc', 'frp', 'frr', 'frs', 'fuf',
+	'fuv', 'fvr', 'fy', 'ga', 'gaa', 'gag', 'gah', 'gan', 'gan-hans',
+	'gan-hant', 'gaz', 'gbm', 'gbz', 'gcf', 'gcr', 'gd', 'gez',
+	'gju-arab', 'gju-deva', 'gl', 'gld', 'glk', 'gn', 'gom',
+	'gom-deva', 'gom-latn', 'gor', 'got', 'gpe', 'grc', 'gsw', 'gu',
+	'guc', 'gum', 'gur', 'guw', 'gv', 'ha', 'ha-arab', 'ha-latn',
+	'hai', 'hak', 'hak-hans', 'hak-hant', 'hak-latn', 'hav', 'haw',
+	'he', 'hi', 'hif', 'hif-deva', 'hif-latn', 'hil', 'hke', 'hne',
+	'hno', 'ho', 'hoc', 'hoc-latn', 'hr', 'hrx', 'hsb', 'hsn', 'ht',
+	'hu', 'hu-formal', 'hy', 'hyw', 'hz', 'ia', 'iba', 'ibb', 'id',
+	'ie', 'ig', 'igb', 'igl', 'ii', 'ik', 'ike-cans', 'ike-latn',
+	'ilo', 'inh', 'io', 'is', 'ish', 'isv', 'isv-cyrl', 'isv-latn',
+	'it', 'iu', 'izh', 'ja', 'jac', 'jam', 'jbo', 'jdt', 'jdt-cyrl',
+	'jje', 'jut', 'jv', 'jv-java', 'ka', 'kaa', 'kab', 'kac', 'kai',
+	'kaj', 'kam', 'kbd', 'kbd-cyrl', 'kbd-latn', 'kbp', 'kcg', 'kck',
+	'kea', 'ken', 'kg', 'kge', 'kge-arab', 'kgg', 'kgp', 'khk', 'khw',
+	'ki', 'kip', 'kiu', 'kj', 'kjh', 'kjp', 'kk', 'kk-arab', 'kk-cn',
+	'kk-cyrl', 'kk-kz', 'kk-latn', 'kk-tr', 'kl', 'km', 'kmb', 'kmr',
+	'kn', 'knc', 'knn', 'ko', 'ko-kp', 'koi', 'koy', 'kr', 'krc',
+	'kri', 'krj', 'krl', 'ks', 'ks-arab', 'ks-deva', 'ksf', 'ksh',
+	'ksw', 'ku', 'ku-arab', 'ku-latn', 'kum', 'kus', 'kv', 'kw', 'ky',
+	'la', 'lad', 'lad-hebr', 'lad-latn', 'lag', 'laj', 'lb', 'lbe',
+	'ldn', 'lez', 'lfn', 'lg', 'li', 'lij', 'lij-mc', 'liv', 'ljp',
+	'lki', 'lkt', 'lld', 'lmo', 'ln', 'lo', 'lou', 'loz', 'lrc', 'lt',
+	'ltg', 'lua', 'lud', 'lue', 'luo', 'lus', 'lut', 'luz', 'lv', 'lvs',
+	'lzh', 'lzz', 'mad', 'mag', 'mai', 'mak', 'mak-bugi', 'map-bms',
+	'maw', 'mcn', 'mdf', 'mdh', 'mey', 'mfa', 'mfe', 'mg', 'mh',
+	'mhr', 'mi', 'mic', 'min', 'miq', 'mk', 'ml', 'mn', 'mn-cyrl',
+	'mn-mong', 'mnc', 'mnc-latn', 'mnc-mong', 'mni', 'mni-beng',
+	'mns', 'mnw', 'mo', 'moe', 'mos', 'mr', 'mrh', 'mrj', 'mrt',
+	'mrv', 'ms', 'ms-arab', 'msi', 'mt', 'mui', 'mus', 'mvf', 'mwl',
+	'mwv', 'mww', 'mww-latn', 'my', 'myv', 'mzn', 'na', 'nah', 'nan',
+	'nan-hani', 'nan-hans', 'nan-hant', 'nan-latn', 'nan-latn-pehoeji',
+	'nan-latn-tailo', 'nap', 'naq', 'nb', 'nd', 'nds', 'nds-nl', 'ne',
+	'new', 'ng', 'nia', 'nit', 'niu', 'njo', 'nl', 'nl-informal',
+	'nmz', 'nn', 'nn-hognorsk', 'no', 'nod', 'nod-thai', 'nog', 'nov',
+	'npi', 'nqo', 'nr', 'nrf-gg', 'nrf-je', 'nrm', 'nso', 'nup', 'nus',
+	'nv', 'ny', 'nyn', 'nyo', 'nys', 'nzi', 'oc', 'ojb', 'oka', 'olo',
+	'om', 'ood', 'or', 'ory', 'os', 'osi', 'ota', 'ovd', 'pa', 'pa-arab',
+	'pa-guru', 'pag', 'pam', 'pap', 'pap-aw', 'pbb', 'pbt', 'pcd',
+	'pcm', 'pdc', 'pdt', 'pes', 'pey', 'pfl', 'phr', 'pi', 'pih', 'pis',
+	'piu', 'pjt', 'pko', 'pl', 'plt', 'pms', 'pnb', 'pnt', 'pov', 'ppl',
+	'prg', 'prs', 'ps', 'pt', 'pt-br', 'pwn', 'pzh', 'qu', 'quc', 'qug',
+	'quy', 'qwh', 'qxp', 'rag', 'raj', 'rap', 'rcf', 'rej', 'rgn',
+	'rhg', 'rif', 'rki', 'rm', 'rm-puter', 'rm-rumgr', 'rm-surmiran',
+	'rm-sursilv', 'rm-sutsilv', 'rm-vallader', 'rmc', 'rmf', 'rml-cyrl',
+	'rmy', 'rn', 'ro', 'roa-rup', 'roa-tara', 'rsk', 'rtm', 'ru', 'rue',
+	'rup', 'ruq', 'ruq-cyrl', 'ruq-latn', 'rut', 'rw', 'rwr', 'ryu',
+	'sa', 'sah', 'sas', 'sat', 'saz', 'sc', 'scn', 'sco', 'sd', 'sdc',
+	'sdh', 'se', 'se-fi', 'se-no', 'se-se', 'sei', 'ses', 'sg', 'sgs',
+	'sh', 'sh-cyrl', 'sh-latn', 'shi', 'shi-latn', 'shi-tfng', 'shn',
+	'shy', 'shy-latn', 'si', 'simple', 'sjd', 'sje', 'sjo', 'sju', 'sk',
+	'skr', 'skr-arab', 'sl', 'sli', 'slr', 'sly', 'sm', 'sma', 'smj',
+	'smn', 'sms', 'sn', 'so', 'son', 'sq', 'sr', 'sr-cyrl', 'sr-ec',
+	'sr-el', 'sr-latn', 'srn', 'sro', 'srq', 'ss', 'st', 'stq', 'sty',
+	'su', 'sv', 'sw', 'swb', 'swh', 'sxu', 'syc', 'syl', 'syl-beng',
+	'syl-sylo', 'szl', 'szy', 'ta', 'taq', 'taq-latn', 'taq-tfng',
+	'tay', 'tcy', 'tdd', 'te', 'tet', 'tg', 'tg-cyrl', 'tg-latn',
+	'th', 'thq', 'thr', 'ti', 'tig', 'tji', 'tk', 'tkr', 'tl', 'tly',
+	'tly-cyrl', 'tmr', 'tn', 'to', 'toi', 'tok', 'tokipona', 'tpi',
+	'tr', 'trp', 'tru', 'trv', 'trw', 'ts', 'tsd', 'tsg', 'tt',
+	'tt-cyrl', 'tt-latn', 'ttj', 'tum', 'tw', 'twd', 'ty', 'tyv',
+	'tzl', 'tzm', 'udm', 'ug', 'ug-arab', 'ug-cyrl', 'ug-latn', 'uk',
+	'umb', 'umu', 'ur', 'uz', 'uz-cyrl', 'uz-latn', 'uzn', 'vai',
+	've', 'vec', 'vep', 'vi', 'vls', 'vmf', 'vmw', 'vo', 'vot', 'vro',
+	'wa', 'wal', 'war', 'wls', 'wlx', 'wo', 'wsg', 'wuu', 'wuu-hans',
+	'wuu-hant', 'xal', 'xh', 'xmf', 'xmm', 'xon', 'xsy', 'ydd', 'yi',
+	'yo', 'yoi', 'yrk', 'yrl', 'yua', 'yue', 'yue-hans', 'yue-hant',
+	'za', 'zea', 'zgh', 'zgh-latn', 'zh', 'zh-cdo', 'zh-classical',
+	'zh-cn', 'zh-hans', 'zh-hant', 'zh-hk', 'zh-min-nan', 'zh-mo',
+	'zh-my', 'zh-sg', 'zh-tw', 'zh-yue', 'zmi', 'zsm', 'zu', 'zun'
+ ];
