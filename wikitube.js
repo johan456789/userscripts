@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.6.6
+// @version      3.6.7
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -18,9 +18,12 @@
 // @grant GM_getValue
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/wikitube.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikitube.js
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // ==/UserScript==
 
 $(document).ready(function () {
+    const logger = Logger('[Wikitube]');
+
     // check api key validity: https://www.googleapis.com/youtube/v3/search?part=snippet&q=YouTube+Data+API&type=video&key=YOUR_API_KEY
     let YOUTUBE_DATA_API_CREDENTIAL = GM_getValue("youtubeApiKey", "");
     
@@ -50,7 +53,7 @@ $(document).ready(function () {
 	addGlobalStyle('#wikitube_container .plusBtn:hover { background-color: rgb(192, 92, 92); }');
 
 	const allow_path = function(path){
-        console.log(path);
+        logger('Processing path:', path);
         const host = window.location.hostname;
         let articleTitle = null;
 
@@ -191,7 +194,7 @@ $(document).ready(function () {
 	const test_func = function(){
 		let url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q=memes&key=' + YOUTUBE_DATA_API_CREDENTIAL;
 		$.getJSON(url, function(response){
-			console.log(response);
+			logger('Test response:', response);
 		})
 	}
 
