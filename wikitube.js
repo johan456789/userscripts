@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.6.5
+// @version      3.6.6
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -34,17 +34,6 @@ $(document).ready(function () {
         }
     }
 
-    // pages of wikipedia which should disable Wikitube
-    const banned_titles = [
-        'Main_Page',
-		];
-    const banned_title_prefixes = [
-        'Help:',
-        'Wikipedia:',
-        'User:',
-        'Special:'
-    ];
-
 	function addGlobalStyle(css) {
 		let head, style;
 		head = document.getElementsByTagName('head')[0];
@@ -62,18 +51,47 @@ $(document).ready(function () {
 
 	const allow_path = function(path){
         console.log(path);
+        const host = window.location.hostname;
+        let articleTitle = null;
 
-        // Check banned patterns for all language prefixes
-        const prefixes_to_check = ['/wiki/', ...wikipedia_lang_codes.map(lang => '/' + lang + '/')];
+		// get article title
+        const onWikipediaIndex = /\.wikipedia\.org$/.test(host) && path === '/w/index.php';
+        if (onWikipediaIndex) {
+            articleTitle = new URLSearchParams(window.location.search).get('title');
+            if (!articleTitle) {
+                return false;
+            }
+        } else {
+            const prefixes = ['/wiki/', ...wikipedia_lang_codes.map(lang => '/' + lang + '/')];
+            for (const prefix of prefixes) {
+                if (path.startsWith(prefix)) {
+                    articleTitle = path.substring(prefix.length);
+                    break;
+                }
+            }
+        }
 
-        for (const prefix of prefixes_to_check) {
-            for (let i = 0; i < banned_title_prefixes.length; i++){
-                if(path.startsWith(prefix + banned_title_prefixes[i])){
-                   return false;
+		// validate article title
+		if (!articleTitle) {
+			return false;
+		} else {
+			// pages of wikipedia which should disable Wikitube
+			const banned_title_prefixes = [
+				'Help:',
+				'Wikipedia:',
+				'User:',
+				'Special:'
+			];
+			const banned_titles = [
+				'Main_Page',
+			];
+            for (let i = 0; i < banned_title_prefixes.length; i++) {
+                if (articleTitle.startsWith(banned_title_prefixes[i])) {
+                    return false;
                 }
             }
             for (let i = 0; i < banned_titles.length; i++) {
-                if(path == prefix + banned_titles[i]){
+                if (articleTitle === banned_titles[i]) {
                     return false;
                 }
             }
