@@ -22,7 +22,7 @@
 
 $(document).ready(function () {
     // check api key validity: https://www.googleapis.com/youtube/v3/search?part=snippet&q=YouTube+Data+API&type=video&key=YOUR_API_KEY
-    var YOUTUBE_DATA_API_CREDENTIAL = GM_getValue("youtubeApiKey", "");
+    let YOUTUBE_DATA_API_CREDENTIAL = GM_getValue("youtubeApiKey", "");
     
     if (!YOUTUBE_DATA_API_CREDENTIAL) {
         YOUTUBE_DATA_API_CREDENTIAL = prompt(
@@ -35,10 +35,10 @@ $(document).ready(function () {
     }
 
     // pages of wikipedia which should disable Wikitube
-    var banned_paths = [
+    const banned_paths = [
         '/wiki/Main_Page',
 		];
-    var banned_paths_prefix = [
+    const banned_paths_prefix = [
         '/wiki/Help:',
         '/wiki/Wikipedia:',
         '/wiki/User:',
@@ -46,7 +46,7 @@ $(document).ready(function () {
     ];
 
 	function addGlobalStyle(css) {
-		var head, style;
+		let head, style;
 		head = document.getElementsByTagName('head')[0];
 		if (!head) { return; }
 		style = document.createElement('style');
@@ -60,7 +60,7 @@ $(document).ready(function () {
 	addGlobalStyle('#wikitube_container .plusBtn { width: 100px;	text-align: center;	border-radius: 5px;	background-color: rgb(192, 62, 62);	background-position: center;	background-repeat: no-repeat;	cursor: pointer;}');
 	addGlobalStyle('#wikitube_container .plusBtn:hover { background-color: rgb(192, 92, 92); }');
 
-	var allow_path = function(path){
+	const allow_path = function(path){
         console.log(path);
         for (let i = 0; i < banned_paths_prefix.length; i++){
 			if(path.startsWith(banned_paths_prefix[i])){
@@ -75,13 +75,13 @@ $(document).ready(function () {
 		return true;
 	}
 
-	var title_text;
-	var num_videos_to_load;
-	var num_videos_loaded = 0;
-	var more_videos_button = $('<div class="plusBtn" title="Load more videos!"></div>');
-	var container = $('<div id="wikitube_container"></div>');
+	let title_text;
+	let num_videos_to_load;
+	let num_videos_loaded = 0;
+	const more_videos_button = $('<div class="plusBtn" title="Load more videos!"></div>');
+	const container = $('<div id="wikitube_container"></div>');
 
-	var first_load = function(){
+	const first_load = function(){
         if( $('#mw-content-text').length ){ // wikipedia
             container.insertBefore('#mw-content-text');
         } else if( $('.main-content').length ){ // 百度百科
@@ -91,7 +91,7 @@ $(document).ready(function () {
         }
 		container.append(more_videos_button);
 
-		var plusImgURL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKT2lDQ1BQaG90b3Nob3AgSUNDIHByb2ZpbGUAAHjanVNnVFPpFj333vRCS4iAlEtv\
+		const plusImgURL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKT2lDQ1BQaG90b3Nob3AgSUNDIHByb2ZpbGUAAHjanVNnVFPpFj333vRCS4iAlEtv\
 UhUIIFJCi4AUkSYqIQkQSoghodkVUcERRUUEG8igiAOOjoCMFVEsDIoK2AfkIaKOg6OIisr74Xuja9a89+bN/rXXPues852zzwfACAyWSDNRNYAMqUIeEeCDx8TG4eQuQIEKJHAAEAizZCFz/SMBAPh+PDwrIsAHvgABeNMLCADATZvAMByH/w/qQplcA\
 YCEAcB0kThLCIAUAEB6jkKmAEBGAYCdmCZTAKAEAGDLY2LjAFAtAGAnf+bTAICd+Jl7AQBblCEVAaCRACATZYhEAGg7AKzPVopFAFgwABRmS8Q5ANgtADBJV2ZIALC3AMDOEAuyAAgMADBRiIUpAAR7AGDIIyN4AISZABRG8lc88SuuEOcqAAB4mbI8uSQ\
 5RYFbCC1xB1dXLh4ozkkXKxQ2YQJhmkAuwnmZGTKBNA/g88wAAKCRFRHgg/P9eM4Ors7ONo62Dl8t6r8G/yJiYuP+5c+rcEAAAOF0ftH+LC+zGoA7BoBt/qIl7gRoXgugdfeLZrIPQLUAoOnaV/Nw+H48PEWhkLnZ2eXk5NhKxEJbYcpXff5nwl/AV/1s+X\
@@ -151,7 +151,7 @@ PCsTq7cEhXHl662meXrqz21SRqn1Dx/M/L9xutmnjEud3T6wAAAABJRU5ErkJggg==';
 		GM_setValue(key, JSON.stringify(cacheObj));
 	}
 
-	var load_new_videos = function(is_first_load){
+	const load_new_videos = function(is_first_load){
 		const cacheKey = 'yt_search_' + title_text;
 		const cachedItems = getCachedResponse(cacheKey);
 
@@ -170,7 +170,7 @@ PCsTq7cEhXHl662meXrqz21SRqn1Dx/M/L9xutmnjEud3T6wAAAABJRU5ErkJggg==';
 			return;
 		}
 
-		var url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q='+title_text+'&key=' + YOUTUBE_DATA_API_CREDENTIAL + '&maxResults='+(num_videos_loaded+num_videos_to_load);
+		const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q='+title_text+'&key=' + YOUTUBE_DATA_API_CREDENTIAL + '&maxResults='+(num_videos_loaded+num_videos_to_load);
 		$.getJSON(url, function(response){
 			if(response['items'].length > 0){
 				setCachedResponse(cacheKey, response['items']);
@@ -179,24 +179,24 @@ PCsTq7cEhXHl662meXrqz21SRqn1Dx/M/L9xutmnjEud3T6wAAAABJRU5ErkJggg==';
 		});
 	}
 
-	var add_videos_to_page = function(new_videos){
-		for (var i = 0; i < new_videos.length; i++) {
+	const add_videos_to_page = function(new_videos){
+		for (let i = 0; i < new_videos.length; i++) {
 			let video = new_videos[i];
-			var videoHtml = '<div class="vinc_yt"><iframe width="350" height="200" frameborder="0" allowfullscreen src="//www.youtube.com/embed/'+video['id']['videoId']+'"></iframe></div>';
+			const videoHtml = '<div class="vinc_yt"><iframe width="350" height="200" frameborder="0" allowfullscreen src="//www.youtube.com/embed/'+video['id']['videoId']+'"></iframe></div>';
 			more_videos_button.before(videoHtml);
 		};
 	}
 
-	var test_func = function(){
+	const test_func = function(){
 		let url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q=memes&key=' + YOUTUBE_DATA_API_CREDENTIAL;
 		$.getJSON(url, function(response){
 			console.log(response);
 		})
 	}
 
-    var vinc_set_horiz_scroll = function(){
+    const vinc_set_horiz_scroll = function(){
         $('#wikitube_container').on('mousewheel DOMMouseScroll', function(e){
-            var delt = null;
+            let delt = null;
 
             if (e.type == 'mousewheel') {
                 delt = (e.originalEvent.wheelDelta * -1);
