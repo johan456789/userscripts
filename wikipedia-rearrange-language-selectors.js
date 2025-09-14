@@ -5,7 +5,7 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.1.5
+// @version        1.1.6
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
@@ -20,7 +20,7 @@
  * Set your preferred languages here in order of priority
  * @type {string[]}
  */
-const myLangs = ["en", "simple", "zh", "ja", "es", "pt", "fr", "ar", "ru"];
+const myLangs = ["en", "simple", "zh", "zh-classical", "ja", "es", "pt", "fr", "ar", "ru"];
 
 /**
  * Setting false will leave other languages in the list
