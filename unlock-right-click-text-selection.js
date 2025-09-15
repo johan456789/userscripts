@@ -10,6 +10,7 @@
 // @run-at       document-start
 // @grant        none
 // @license      MIT
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/unlock-right-click-text-selection.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/unlock-right-click-text-selection.js
 // ==/UserScript==
@@ -17,11 +18,7 @@
 (function () {
     'use strict';
 
-    const SCRIPT_PREFIX = '[Unlock-Right-CLick]';
-    function log(message, ...rest) {
-        // Keep logging minimal to avoid noise
-        console.log(`${SCRIPT_PREFIX} ${message}`, ...rest);
-    }
+    const logger = Logger('[Unlock-Right-Click]');
 
     function removeInlineHandlerFor(eventType) {
         const onProp = 'on' + eventType;
@@ -62,7 +59,7 @@
     }
 
     function unlockInteractions() {
-        log('Applying unlock handlers');
+        logger('Applying unlock handlers');
         removeInlineHandlerFor('contextmenu');
         removeInlineHandlerFor('click');
         removeInlineHandlerFor('mousedown');
