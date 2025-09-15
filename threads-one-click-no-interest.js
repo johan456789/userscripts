@@ -7,6 +7,7 @@
 // @match        https://www.threads.net/*
 // @match        https://www.threads.com/*
 // @grant        none
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/retry.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/threads-one-click-no-interest.js
@@ -16,13 +17,10 @@
 (function() {
     'use strict';
 
-    function logger(message) {
-        console.log("[Threads-Not-Interested] " + message);
-    }
+    const logger = Logger('[Threads One Click No Interest]');
+    logger("Script started");
 
-        logger("Script started");
-
-        function handleNotInterestedClick(e) {
+    function handleNotInterestedClick(e) {
             e.preventDefault();
             e.stopImmediatePropagation();
 
@@ -134,7 +132,7 @@
 
                 logger("Button added successfully.");
             } catch (err) {
-                console.error('[Threads-Not-Interested] Error in addNotInterestedButton:', err);
+                logger.error('Error in addNotInterestedButton:', err);
             }
         }
 

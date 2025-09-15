@@ -5,6 +5,7 @@
 // @version      0.4.2
 // @match        https://www.quora.com/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/quora-show-answers-by-default.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/quora-show-answers-by-default.js
@@ -12,7 +13,8 @@
 
 (function () {
     'use strict';
-    console.log('Quora-Show-Answers-By-Default: script started');
+    const logger = Logger('[Quora Show Answers by Default]');
+    logger('script started');
 
     const dropdownBtnSelector = '#mainContent .q-box button';
     const dropdownMenuSelector = '.q-box .puppeteer_test_popover_menu';
@@ -24,7 +26,7 @@
     waitForElement(dropdownMenuSelector, clickAnswerInMenu);
 
     function clickDropdownBtn(btn) {
-        console.log('Quora-Show-Answers-By-Default: clicking dropdown button');
+        logger('clicking dropdown button');
         btn.click();
     }
 
@@ -34,10 +36,10 @@
                 .find((el) => el.textContent.toLowerCase().includes('answer'));
 
             if (answerBtn) {
-                console.log('Quora-Show-Answers-By-Default: clicking "answer" option');
+                logger('clicking "answer" option');
                 answerBtn.click();
             } else {
-                console.log('Quora-Show-Answers-By-Default: "answer" option not found');
+                logger('"answer" option not found');
             }
         }, SECOND_CLICK_DELAY_MS);
     }
