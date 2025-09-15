@@ -8,6 +8,7 @@
 // @match        https://leetcode.com/tag/*
 // @icon         https://www.google.com/s2/favicons?domain=leetcode.com
 // @grant        none
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @license      MIT
 // @run-at       document-end
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/lc-tag-list-sort-by-freq.js
@@ -17,6 +18,7 @@
 (function() {
     'use strict';
 
+    const logger = Logger('[LC-Tag-List-Sort]');
     const MAX_TIMEOUT = 10000; // 10 seconds
     let startTime;
 
@@ -29,15 +31,15 @@
         // Check elapsed time
         let elapsed = Date.now() - startTime;
         if (elapsed > MAX_TIMEOUT) {
-            // console.log('Timeout reached, aborting');
+            logger.warn('Timeout reached, aborting');
             return;
         }
 
         // Using the provided selector to target the element
         var targetElement = document.querySelector('#app > div > div.ant-row.content__xk8m > div > div.container__2dba > div > table > thead > tr > th.reactable-th-frequency.reactable-header-sortable.frequency__Hs3t');
-        // console.log('checking if frequency element exist');
+        logger('checking if frequency element exist');
         if (targetElement) {
-            // console.log('modify');
+            logger('Element found, clicking twice');
             targetElement.click();
             targetElement.click();
         } else {
