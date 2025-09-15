@@ -8,13 +8,12 @@
 // @run-at       document-start
 // @grant        none
 // @license      MIT
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-hide-pause-overlay.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-hide-pause-overlay.js
 // ==/UserScript==
 
-function logger(message) {
-    console.log("[YT-hide-pause-overlay] " + message);
-}
+const logger = Logger('[yt-hide-pause-overlay]');
 
 (function() {
     'use strict';

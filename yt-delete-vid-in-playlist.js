@@ -9,15 +9,14 @@
 // @grant        none
 // @license      MIT
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-delete-vid-in-playlist.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-delete-vid-in-playlist.js
 // ==/UserScript==
 
 // this script is edited from https://update.greasyfork.org/scripts/499379/Youtube%20button%20to%20delete%20a%20video%20from%20a%20playlist.user.js
 
-function logger(message) {
-    console.log("[YT-playlist] " + message);
-}
+const logger = Logger('[yt-delete-vid-in-playlist]');
 
 
 async function getSApiSidHash() {
@@ -92,7 +91,7 @@ async function fetchAccountMenuData() {
         const data = await response.json();
         return data;
     } catch (error) {
-        console.error('Error fetching account menu data:', error);
+        logger.error('Error fetching account menu data:', error);
         throw error;
     }
 }
@@ -133,7 +132,7 @@ async function getCurrentUserName() {
         });
         return profileName || 'Unknown User'; // Fallback if name is empty
     } catch (error) {
-        logger('Error getting username.', error);
+        logger.error('Error getting username.', error);
         return 'Unknown User'; // Fallback on timeout or error
     }
 }
@@ -161,7 +160,7 @@ async function checkPlaylistEditable() {
                 waitForElement(avatarStackSelector, (element) => resolve(element));
             });
         } catch (e) {
-            logger(`Error: ${e}`)
+            logger.error('Error:', e)
         }
 
         if (!avatarStack) {
@@ -221,7 +220,7 @@ async function checkPlaylistEditable() {
         return managerNames.includes(currentUserName); // Check if user is a collaborator
 
     } catch (error) {
-        console.error('Error checking playlist editability:', error);
+        logger.error('Error checking playlist editability:', error);
         return false; // Default to false on error
     }
 }
