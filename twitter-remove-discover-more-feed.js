@@ -10,15 +10,14 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/twitter-remove-discover-more-feed.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/twitter-remove-discover-more-feed.js
 // ==/UserScript==
 
-function logger(message) {
-    console.log("[Twitter-Remove-Discover-More] " + message);
-}
+const logger = Logger('[Twitter-Remove-Discover-More-Feed]');
 logger("Userscript started.");
 
 (function() {

@@ -10,14 +10,13 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/twitter-reduce-sidebar-clutter.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/twitter-reduce-sidebar-clutter.js
 // ==/UserScript==
 
-function logger(message) {
-    console.log("[Twitter-Reduce-Sidebar-Clutter] " + message);
-}
+const logger = Logger('[Twitter-Reduce-Sidebar-Clutter]');
 logger("Userscript started.");
 
 const sidebarMenuSelector = '#react-root header nav';
