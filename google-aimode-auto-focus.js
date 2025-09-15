@@ -7,6 +7,7 @@
 // @match        https://www.google.com/search?udm=50*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=google.com
 // @grant        none
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @run-at       document-end
 // @license      MIT
 // @downloadURL  https://github.com/johan456789/userscripts/raw/refs/heads/main/google-aimode-auto-focus.js
@@ -15,9 +16,7 @@
 
 (function() {
     'use strict';
-    function logger(message) {
-        console.log("[Google-AI-Mode-Auto-Focus] " + message);
-    }
+    const logger = Logger('[Google-AI-Mode-Auto-Focus]');
     logger('Script started');
 
     const textAreaSelector = '#cnt textarea';

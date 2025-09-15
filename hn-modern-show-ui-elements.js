@@ -7,6 +7,7 @@
 // @match        https://news.ycombinator.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=ycombinator.com
 // @grant        none
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @run-at       document-start
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/hn-modern-show-ui-elements.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/hn-modern-show-ui-elements.js
@@ -17,6 +18,7 @@
 
 (function() {
     'use strict';
+    const logger = Logger('[HN-Modern-Show-UI]');
 
     const style = document.createElement('style');
     style.innerHTML = `
@@ -34,4 +36,5 @@
         }
     `;
     document.head.appendChild(style);
+    logger('Successfully injected styles to always show UI elements.');
 })();
