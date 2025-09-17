@@ -2,7 +2,7 @@
 // @name         Quora-Show-Answers-By-Default
 // @namespace    http://tampermonkey.net/
 // @description  Show direct (instead of related) answers by default on Quora.
-// @version      0.4.2
+// @version      0.4.3
 // @match        https://www.quora.com/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
@@ -12,35 +12,36 @@
 // ==/UserScript==
 
 (function () {
-    'use strict';
-    const logger = Logger('[Quora-Show-Answers-By-Default]');
-    logger('script started');
+  "use strict";
+  const logger = Logger("[Quora-Show-Answers-By-Default]");
+  logger("script started");
 
-    const dropdownBtnSelector = '#mainContent .q-box button';
-    const dropdownMenuSelector = '.q-box .puppeteer_test_popover_menu';
+  const dropdownBtnSelector = "#mainContent .q-box button";
+  const dropdownMenuSelector = ".q-box .puppeteer_test_popover_menu";
 
-    // Delay (ms) between clicking the dropdown button and selecting the "answer" option.
-    const SECOND_CLICK_DELAY_MS = 100;
+  // Delay (ms) between clicking the dropdown button and selecting the "answer" option.
+  const SECOND_CLICK_DELAY_MS = 100;
 
-    waitForElement(dropdownBtnSelector, clickDropdownBtn);
-    waitForElement(dropdownMenuSelector, clickAnswerInMenu);
+  waitForElement(dropdownBtnSelector, clickDropdownBtn);
+  waitForElement(dropdownMenuSelector, clickAnswerInMenu);
 
-    function clickDropdownBtn(btn) {
-        logger('clicking dropdown button');
-        btn.click();
-    }
+  function clickDropdownBtn(btn) {
+    logger("clicking dropdown button");
+    btn.click();
+  }
 
-    function clickAnswerInMenu(menu) {
-        setTimeout(() => {
-            const answerBtn = Array.from(menu.querySelectorAll('*'))
-                .find((el) => el.textContent.toLowerCase().includes('answer'));
+  function clickAnswerInMenu(menu) {
+    setTimeout(() => {
+      const answerBtn = Array.from(menu.querySelectorAll("*")).find((el) =>
+        el.textContent.toLowerCase().includes("answer")
+      );
 
-            if (answerBtn) {
-                logger('clicking "answer" option');
-                answerBtn.click();
-            } else {
-                logger('"answer" option not found');
-            }
-        }, SECOND_CLICK_DELAY_MS);
-    }
+      if (answerBtn) {
+        logger('clicking "answer" option');
+        answerBtn.click();
+      } else {
+        logger('"answer" option not found');
+      }
+    }, SECOND_CLICK_DELAY_MS);
+  }
 })();

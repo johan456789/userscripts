@@ -10,16 +10,14 @@
  * has .error and .warn methods with the same prefix.
  */
 function Logger(prefix) {
-    function log(message, ...rest) {
-        console.log(prefix + ' ' + message, ...rest);
-    }
-    log.error = function(message, ...rest) {
-        console.error(prefix + ' ' + message, ...rest);
-    };
-    log.warn = function(message, ...rest) {
-        console.warn(prefix + ' ' + message, ...rest);
-    };
-    return log;
+  function log(message, ...rest) {
+    console.log(prefix + " " + message, ...rest);
+  }
+  log.error = function (message, ...rest) {
+    console.error(prefix + " " + message, ...rest);
+  };
+  log.warn = function (message, ...rest) {
+    console.warn(prefix + " " + message, ...rest);
+  };
+  return log;
 }
-
-

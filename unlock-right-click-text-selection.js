@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unlock Right-Click & Text Selection
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Unlock right-click menu and text selection on unfriendly websites like pixnet.net
 // @author       You
 // @match        https://*.pixnet.net/*
@@ -16,38 +16,44 @@
 // ==/UserScript==
 
 (function () {
-    'use strict';
+  "use strict";
 
-    const logger = Logger('[Unlock-Right-Click]');
+  const logger = Logger("[Unlock-Right-Click]");
 
-    function removeInlineHandlerFor(eventType) {
-        const onProp = 'on' + eventType;
-        if (window.addEventListener) {
-            window.addEventListener(
-                eventType,
-                function (e) {
-                    // Clear inline handlers up the tree for this event type
-                    for (let node = e.target; node; node = node.parentNode) {
-                        try {
-                            if (onProp in node) node[onProp] = null;
-                        } catch (_) {
-                            // Ignore nodes that disallow property assignment
-                        }
-                    }
-                },
-                true // capture
-            );
-        }
-
-        try { window[onProp] = null; } catch (_) {}
-        try { document[onProp] = null; } catch (_) {}
-        try { if (document.body) document.body[onProp] = null; } catch (_) {}
+  function removeInlineHandlerFor(eventType) {
+    const onProp = "on" + eventType;
+    if (window.addEventListener) {
+      window.addEventListener(
+        eventType,
+        function (e) {
+          // Clear inline handlers up the tree for this event type
+          for (let node = e.target; node; node = node.parentNode) {
+            try {
+              if (onProp in node) node[onProp] = null;
+            } catch (_) {
+              // Ignore nodes that disallow property assignment
+            }
+          }
+        },
+        true // capture
+      );
     }
 
-    function injectUserSelectCSS() {
-        const style = document.createElement('style');
-        style.setAttribute('data-pixnet-unlock', 'true');
-        style.textContent = `
+    try {
+      window[onProp] = null;
+    } catch (_) {}
+    try {
+      document[onProp] = null;
+    } catch (_) {}
+    try {
+      if (document.body) document.body[onProp] = null;
+    } catch (_) {}
+  }
+
+  function injectUserSelectCSS() {
+    const style = document.createElement("style");
+    style.setAttribute("data-pixnet-unlock", "true");
+    style.textContent = `
             * {
                 -webkit-user-select: auto !important;
                 -moz-user-select: auto !important;
@@ -55,29 +61,29 @@
                 user-select: auto !important;
             }
         `;
-        (document.head || document.documentElement).appendChild(style);
-    }
+    (document.head || document.documentElement).appendChild(style);
+  }
 
-    function unlockInteractions() {
-        logger('Applying unlock handlers');
-        removeInlineHandlerFor('contextmenu');
-        removeInlineHandlerFor('click');
-        removeInlineHandlerFor('mousedown');
-        removeInlineHandlerFor('mouseup');
-        removeInlineHandlerFor('selectstart');
-        injectUserSelectCSS();
-    }
+  function unlockInteractions() {
+    logger("Applying unlock handlers");
+    removeInlineHandlerFor("contextmenu");
+    removeInlineHandlerFor("click");
+    removeInlineHandlerFor("mousedown");
+    removeInlineHandlerFor("mouseup");
+    removeInlineHandlerFor("selectstart");
+    injectUserSelectCSS();
+  }
 
-    // Run ASAP
-    unlockInteractions();
+  // Run ASAP
+  unlockInteractions();
 
-    // Run again after DOM is ready in case <head> / <body> was not yet available
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', unlockInteractions, { once: true });
-    } else {
-        // Also schedule a micro-delay to catch late mutations
-        setTimeout(unlockInteractions, 0);
-    }
+  // Run again after DOM is ready in case <head> / <body> was not yet available
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", unlockInteractions, {
+      once: true,
+    });
+  } else {
+    // Also schedule a micro-delay to catch late mutations
+    setTimeout(unlockInteractions, 0);
+  }
 })();
-
-

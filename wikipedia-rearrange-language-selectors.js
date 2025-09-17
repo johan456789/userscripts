@@ -5,7 +5,7 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.1.6
+// @version        1.1.7
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
@@ -20,7 +20,18 @@
  * Set your preferred languages here in order of priority
  * @type {string[]}
  */
-const myLangs = ["en", "simple", "zh", "zh-classical", "ja", "es", "pt", "fr", "ar", "ru"];
+const myLangs = [
+  "en",
+  "simple",
+  "zh",
+  "zh-classical",
+  "ja",
+  "es",
+  "pt",
+  "fr",
+  "ar",
+  "ru",
+];
 
 /**
  * Setting false will leave other languages in the list
@@ -43,35 +54,35 @@ const ul = first.parentNode;
 // indexed by their priority in the myLangs list.
 const found = [];
 for (let i = 0; i < langs.length; i++) {
-    const lncn = langs[i].className;
-    const l1 = lncn.replace(/^.*interwiki-(\S+).*$/, "$1");
+  const lncn = langs[i].className;
+  const l1 = lncn.replace(/^.*interwiki-(\S+).*$/, "$1");
 
-    const ln = myLangs.indexOf(l1);
-    if (ln > -1) {
-        found[ln] = langs[i];
-    }
+  const ln = myLangs.indexOf(l1);
+  if (ln > -1) {
+    found[ln] = langs[i];
+  }
 }
 
 // Traverse the 'found' array backwards so languages earlier in 'myLangs'
 // end up closest to the top of the list.
 let foundCount = 0;
-for (let i = found.length - 1; i >= 0; i--){
-    if (found[i]) {
-        ul.insertBefore(found[i], first);
-        first = found[i];
-        foundCount++;
-    }
+for (let i = found.length - 1; i >= 0; i--) {
+  if (found[i]) {
+    ul.insertBefore(found[i], first);
+    first = found[i];
+    foundCount++;
+  }
 }
 
 // If 'removeOthers' is true, prune any languages that weren't in 'myLangs';
 // otherwise, leave them in place.
 if (removeOthers) {
-    if (foundCount == 0) {
-        // remove "other languages" menu if empty
-        pLang.parentNode.removeChild(pLang);
-    } else {
-        while(ul.children.length > foundCount) {
-            ul.removeChild(ul.children[foundCount]);
-        }
+  if (foundCount == 0) {
+    // remove "other languages" menu if empty
+    pLang.parentNode.removeChild(pLang);
+  } else {
+    while (ul.children.length > foundCount) {
+      ul.removeChild(ul.children[foundCount]);
     }
+  }
 }
