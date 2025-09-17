@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Twitter Remove Discover More Feed
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Hide the irrelevant "Discover more" feed and everything after it in comment threads.
 // @author       You
 // @match        https://*.twitter.com/*
 // @match        https://twitter.com/*
 // @match        https://x.com/*
+// @exclude      https://x.com/home
 // @license      MIT
 // @run-at       document-end
 // @noframes
