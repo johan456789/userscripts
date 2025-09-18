@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Cursor Usage Color Warning
 // @namespace    http://tampermonkey.net/
-// @version      0.5.1
+// @version      0.5.2
 // @description  Modifies the usage bar color on cursor.com/dashboard based on prorated usage.
 // @author       You
-// @match        https://www.cursor.com/dashboard
-// @match        https://www.cursor.com/*/dashboard
-// @match        https://cursor.com/dashboard
-// @match        https://cursor.com/*/dashboard
+// @match        https://www.cursor.com/dashboard*
+// @match        https://www.cursor.com/*/dashboard*
+// @match        https://cursor.com/dashboard*
+// @match        https://cursor.com/*/dashboard*
 // @grant        none
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/cursor-usage-color-warning.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/cursor-usage-color-warning.js
