@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.1.1
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook/*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      api.elevenlabs.io
 // @license      MIT
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
@@ -28,11 +30,37 @@ const logger = Logger("[gemini-storybook-tts]");
   const STORY_TEXT_SELECTOR =
     "storybook > div > div.ng-star-inserted:not(.hide) > storybook-page.right > div:not(.underneath) p.story-text";
 
-  // Hardcoded ElevenLabs API key (temporary; to be refactored later)
-  const XI_API_KEY = "xi-api-key";
+  function getElevenLabsApiKeyOrPrompt() {
+    const ELEVEN_LABS_STORAGE_KEY = "gemini_storybook_tts_elevenlabs_api_key";
+    let elevenLabsApiKey = GM_getValue(ELEVEN_LABS_STORAGE_KEY, "");
+
+    if (!elevenLabsApiKey) {
+      const userInput = prompt(
+        "[gemini-storybook-tts] ElevenLabs API key not set. Please enter your ElevenLabs API key:",
+        ""
+      );
+      if (userInput) {
+        const trimmed = userInput.trim();
+        if (trimmed) {
+          elevenLabsApiKey = trimmed;
+          GM_setValue(ELEVEN_LABS_STORAGE_KEY, elevenLabsApiKey);
+          logger("Saved ElevenLabs API key");
+        }
+      }
+    }
+    if (!elevenLabsApiKey) {
+      logger.warn("ElevenLabs API key missing. Aborting TTS request.");
+      return null;
+    }
+    return elevenLabsApiKey;
+  }
 
   async function requestAndPlayTTS(text) {
-    const apiKey = XI_API_KEY;
+    const apiKey = getElevenLabsApiKeyOrPrompt();
+    if (!apiKey) {
+      logger.warn("ElevenLabs API key missing. Aborting TTS request.");
+      return;
+    }
     const voiceId = "g10k86KeEUyBqW9lcKYg";
     const outputFormat = "mp3_44100_128";
     const modelId = "eleven_multilingual_v2";
