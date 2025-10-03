@@ -65,12 +65,16 @@ const logger = Logger("[gemini-storybook-tts]");
     const outputFormat = "mp3_44100_128";
     const modelId = "eleven_multilingual_v2";
     const languageCode = "es";
+    const voiceSettings = {
+      speed: 0.8,
+    };
 
     const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=${outputFormat}`;
     const payload = {
       text: text,
       model_id: modelId,
       language_code: languageCode,
+      voice_settings: voiceSettings,
     };
 
     try {
