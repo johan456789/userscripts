@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.1
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook/*
@@ -12,6 +12,7 @@
 // @connect      api.elevenlabs.io
 // @license      MIT
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @require      https://cdn.jsdelivr.net/npm/idb-keyval@6.2.2/dist/umd.js
 // ==/UserScript==
 
@@ -335,18 +336,14 @@ const logger = Logger("[gemini-storybook-tts]");
     ensureButtonAboveStory(storyTextEl);
   }
 
+  const debouncedRunOnce = debounce(runOnce, 200);
+
   // Initial run after DOM is ready
   runOnce();
 
   // Observe page changes to re-insert when the visible page flips
   const observer = new MutationObserver(() => {
-    // Debounce-like behavior without external util to keep file self-contained
-    if (observer._pending) return;
-    observer._pending = true;
-    setTimeout(() => {
-      observer._pending = false;
-      runOnce();
-    }, 200);
+    debouncedRunOnce();
   });
   observer.observe(document.body, {
     childList: true,
