@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.1.1
+// @version      0.2.0
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook/*
@@ -12,6 +12,7 @@
 // @connect      api.elevenlabs.io
 // @license      MIT
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
+// @require      https://cdn.jsdelivr.net/npm/idb-keyval@6.2.2/dist/umd.js
 // ==/UserScript==
 
 const logger = Logger("[gemini-storybook-tts]");
@@ -29,6 +30,37 @@ const logger = Logger("[gemini-storybook-tts]");
   // .hide is dynamically added and removed to the element on storybook page change
   const STORY_TEXT_SELECTOR =
     "storybook > div > div.ng-star-inserted:not(.hide) > storybook-page.right > div:not(.underneath) p.story-text";
+
+  // Simple IndexedDB cache via idb-keyval (loaded via @require)
+  const idb = typeof idbKeyval !== "undefined" ? idbKeyval : null;
+  const idbGet = idb?.get?.bind(idb);
+  const idbSet = idb?.set?.bind(idb);
+
+  async function getCachedTTSItem(text) {
+    if (!idbGet) return null;
+    try {
+      const item = await idbGet(text);
+      if (item && item.audioBlob) {
+        logger("Cache hit for TTS audio");
+        return item;
+      }
+      logger("Cache miss for TTS audio");
+      return null;
+    } catch (err) {
+      logger.warn("Cache get failed", err);
+      return null;
+    }
+  }
+
+  async function cacheTTSItem(text, audioBlob) {
+    if (!idbSet) return;
+    try {
+      const item = { audioBlob, creationDate: Date.now() };
+      await idbSet(text, item);
+    } catch (err) {
+      logger.warn("Cache set failed", err);
+    }
+  }
 
   function getElevenLabsApiKeyOrPrompt() {
     const ELEVEN_LABS_STORAGE_KEY = "gemini_storybook_tts_elevenlabs_api_key";
@@ -56,6 +88,22 @@ const logger = Logger("[gemini-storybook-tts]");
   }
 
   async function requestAndPlayTTS(text) {
+    // Try cache first to avoid unnecessary API usage
+    const cached = await getCachedTTSItem(text);
+    if (cached && cached.audioBlob) {
+      const urlFromCache = URL.createObjectURL(cached.audioBlob);
+      const audioFromCache = new Audio(urlFromCache);
+      audioFromCache.addEventListener("ended", () =>
+        URL.revokeObjectURL(urlFromCache)
+      );
+      try {
+        await audioFromCache.play();
+      } catch (err) {
+        logger.error("Audio playback failed (cache)", err);
+      }
+      return;
+    }
+
     const apiKey = getElevenLabsApiKeyOrPrompt();
     if (!apiKey) {
       logger.warn("ElevenLabs API key missing. Aborting TTS request.");
@@ -113,8 +161,12 @@ const logger = Logger("[gemini-storybook-tts]");
       const blob = new Blob([buffer], {
         type: contentTypeMatch?.[1]?.trim() || "audio/mpeg",
       });
+      // Cache the result for future use
+      cacheTTSItem(text, blob);
+
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      audio.addEventListener("ended", () => URL.revokeObjectURL(url));
       try {
         await audio.play();
       } catch (err) {
