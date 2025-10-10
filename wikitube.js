@@ -223,20 +223,31 @@ const Wikitube = (function () {
   let context = null;
 
   function loadAndRender(isFirstLoad) {
+    logger(`loadAndRender called with isFirstLoad: ${isFirstLoad}`);
     const cacheKey = "yt_search_" + state.titleText;
     const cachedItems = getCachedResponse(cacheKey);
+
     function processVideos(videoItems) {
+      logger(
+        `Processing ${videoItems.length} videos, currently loaded: ${state.numVideosLoaded}`
+      );
       if (isFirstLoad) {
+        logger("First load - setting up container");
         setupContainer(context.insertBefore);
       }
       const newVideos = videoItems.slice(state.numVideosLoaded);
-      state.numVideosLoaded += state.numVideosToLoad;
+      logger(`Adding ${newVideos.length} new videos to page`);
+      state.numVideosLoaded += newVideos.length;
       addVideosToPage(newVideos);
     }
+
     if (cachedItems) {
+      logger("Using cached items");
       processVideos(cachedItems);
       return;
     }
+
+    logger("No cached items found, making API request");
     const url =
       "https://www.googleapis.com/youtube/v3/search?part=snippet&q=" +
       encodeURIComponent(state.titleText) +
@@ -244,10 +255,16 @@ const Wikitube = (function () {
       state.apiKey +
       "&maxResults=" +
       (state.numVideosLoaded + state.numVideosToLoad);
+    logger(`API URL: ${url}`);
+
     $.getJSON(url, function (response) {
+      logger("API response received");
       if (response && response["items"] && response["items"].length > 0) {
+        logger(`Caching ${response["items"].length} items`);
         setCachedResponse(cacheKey, response["items"]);
         processVideos(response["items"]);
+      } else {
+        logger("No items found in API response");
       }
     });
   }
