@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.7.1
+// @version      3.7.2
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -91,7 +91,7 @@ const Wikitube = (function () {
       const prefixes = [
         "/wiki/",
         ...wikipedia_lang_codes.map(function (lang) {
-          return "/" + lang + "/";
+          return `/${lang}/`;
         }),
       ];
       for (let i = 0; i < prefixes.length; i++) {
@@ -190,6 +190,7 @@ const Wikitube = (function () {
   }
 
   function setupContainer(insertBeforeSelector) {
+    logger("Setting up container");
     state.container = $('<div id="wikitube_container"></div>');
     state.moreButton = $(
       '<div class="plusBtn" title="Load more videos!"></div>'
@@ -198,11 +199,12 @@ const Wikitube = (function () {
     state.container.append(state.moreButton);
     const plusSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect x="56" y="24" width="16" height="80" rx="8" fill="white"/><rect x="24" y="56" width="80" height="16" rx="8" fill="white"/></svg>';
-    const plusSvgURL =
-      "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(plusSvg);
-    state.moreButton.css("background-image", "url(" + plusSvgURL + ")");
+    const plusSvgURL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+      plusSvg
+    )}`;
+    state.moreButton.css("background-image", `url(${plusSvgURL})`);
     state.moreButton.click(function () {
-      loadAndRender(false);
+      loadAndRender();
     });
     $("iframe").ready(function () {
       setHorizScroll();
@@ -212,42 +214,54 @@ const Wikitube = (function () {
   function addVideosToPage(newVideos) {
     for (let i = 0; i < newVideos.length; i++) {
       const video = newVideos[i];
-      const videoHtml =
-        '<div class="vinc_yt"><iframe width="350" height="200" frameborder="0" allowfullscreen src="//www.youtube.com/embed/' +
-        video["id"]["videoId"] +
-        '"></iframe></div>';
+      const videoHtml = `<div class="vinc_yt"><iframe width="350" height="200" frameborder="0" allowfullscreen src="//www.youtube.com/embed/${video["id"]["videoId"]}"></iframe></div>`;
       state.moreButton.before(videoHtml);
     }
   }
 
   let context = null;
 
-  function loadAndRender(isFirstLoad) {
-    const cacheKey = "yt_search_" + state.titleText;
+  function loadAndRender() {
+    const cacheKey = `yt_search_${state.titleText}`;
     const cachedItems = getCachedResponse(cacheKey);
+
     function processVideos(videoItems) {
-      if (isFirstLoad) {
-        setupContainer(context.insertBefore);
-      }
-      const newVideos = videoItems.slice(state.numVideosLoaded);
-      state.numVideosLoaded += state.numVideosToLoad;
+      logger(
+        `Processing ${videoItems.length} videos, currently loaded: ${state.numVideosLoaded}`
+      );
+      const newVideos = videoItems.slice(
+        state.numVideosLoaded,
+        state.numVideosLoaded + state.numVideosToLoad
+      );
+      logger(`Adding ${newVideos.length} new videos to page`);
+      state.numVideosLoaded += newVideos.length;
       addVideosToPage(newVideos);
+      // Hide the plus button when all available videos are loaded (max 50)
+      if (state.moreButton && state.numVideosLoaded >= videoItems.length) {
+        state.moreButton.css("display", "none");
+      }
     }
+
     if (cachedItems) {
+      logger("Using cached items");
       processVideos(cachedItems);
       return;
     }
-    const url =
-      "https://www.googleapis.com/youtube/v3/search?part=snippet&q=" +
-      encodeURIComponent(state.titleText) +
-      "&key=" +
-      state.apiKey +
-      "&maxResults=" +
-      (state.numVideosLoaded + state.numVideosToLoad);
+
+    logger("No cached items found, making API request");
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
+      state.titleText
+    )}&key=${state.apiKey}&maxResults=50`; // the max allowed by the API
+    logger(`API URL: ${url}`);
+
     $.getJSON(url, function (response) {
+      logger("API response received");
       if (response && response["items"] && response["items"].length > 0) {
+        logger(`Caching ${response["items"].length} items`);
         setCachedResponse(cacheKey, response["items"]);
         processVideos(response["items"]);
+      } else {
+        logger("No items found in API response");
       }
     });
   }
@@ -266,7 +280,8 @@ const Wikitube = (function () {
     // insert placeholder container
     state.titleText = context.titleText;
     state.numVideosToLoad = context.numVideosToLoad;
-    loadAndRender(true);
+    setupContainer(context.insertBefore);
+    loadAndRender();
   }
 
   return { init: init };
