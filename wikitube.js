@@ -240,6 +240,10 @@ const Wikitube = (function () {
       logger(`Adding ${newVideos.length} new videos to page`);
       state.numVideosLoaded += newVideos.length;
       addVideosToPage(newVideos);
+      // Hide the plus button when all available videos are loaded (max 50)
+      if (state.moreButton && state.numVideosLoaded >= videoItems.length) {
+        state.moreButton.css("display", "none");
+      }
     }
 
     if (cachedItems) {
