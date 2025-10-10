@@ -91,7 +91,7 @@ const Wikitube = (function () {
       const prefixes = [
         "/wiki/",
         ...wikipedia_lang_codes.map(function (lang) {
-          return "/" + lang + "/";
+          return `/${lang}/`;
         }),
       ];
       for (let i = 0; i < prefixes.length; i++) {
@@ -198,9 +198,10 @@ const Wikitube = (function () {
     state.container.append(state.moreButton);
     const plusSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect x="56" y="24" width="16" height="80" rx="8" fill="white"/><rect x="24" y="56" width="80" height="16" rx="8" fill="white"/></svg>';
-    const plusSvgURL =
-      "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(plusSvg);
-    state.moreButton.css("background-image", "url(" + plusSvgURL + ")");
+    const plusSvgURL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+      plusSvg
+    )}`;
+    state.moreButton.css("background-image", `url(${plusSvgURL})`);
     state.moreButton.click(function () {
       loadAndRender(false);
     });
@@ -212,10 +213,7 @@ const Wikitube = (function () {
   function addVideosToPage(newVideos) {
     for (let i = 0; i < newVideos.length; i++) {
       const video = newVideos[i];
-      const videoHtml =
-        '<div class="vinc_yt"><iframe width="350" height="200" frameborder="0" allowfullscreen src="//www.youtube.com/embed/' +
-        video["id"]["videoId"] +
-        '"></iframe></div>';
+      const videoHtml = `<div class="vinc_yt"><iframe width="350" height="200" frameborder="0" allowfullscreen src="//www.youtube.com/embed/${video["id"]["videoId"]}"></iframe></div>`;
       state.moreButton.before(videoHtml);
     }
   }
@@ -224,7 +222,7 @@ const Wikitube = (function () {
 
   function loadAndRender(isFirstLoad) {
     logger(`loadAndRender called with isFirstLoad: ${isFirstLoad}`);
-    const cacheKey = "yt_search_" + state.titleText;
+    const cacheKey = `yt_search_${state.titleText}`;
     const cachedItems = getCachedResponse(cacheKey);
 
     function processVideos(videoItems) {
@@ -235,7 +233,10 @@ const Wikitube = (function () {
         logger("First load - setting up container");
         setupContainer(context.insertBefore);
       }
-      const newVideos = videoItems.slice(state.numVideosLoaded);
+      const newVideos = videoItems.slice(
+        state.numVideosLoaded,
+        state.numVideosLoaded + state.numVideosToLoad
+      );
       logger(`Adding ${newVideos.length} new videos to page`);
       state.numVideosLoaded += newVideos.length;
       addVideosToPage(newVideos);
@@ -248,13 +249,9 @@ const Wikitube = (function () {
     }
 
     logger("No cached items found, making API request");
-    const url =
-      "https://www.googleapis.com/youtube/v3/search?part=snippet&q=" +
-      encodeURIComponent(state.titleText) +
-      "&key=" +
-      state.apiKey +
-      "&maxResults=" +
-      (state.numVideosLoaded + state.numVideosToLoad);
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
+      state.titleText
+    )}&key=${state.apiKey}&maxResults=50`; // the max allowed by the API
     logger(`API URL: ${url}`);
 
     $.getJSON(url, function (response) {
