@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.7.1
+// @version      3.7.2
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -190,6 +190,7 @@ const Wikitube = (function () {
   }
 
   function setupContainer(insertBeforeSelector) {
+    logger("Setting up container");
     state.container = $('<div id="wikitube_container"></div>');
     state.moreButton = $(
       '<div class="plusBtn" title="Load more videos!"></div>'
@@ -203,7 +204,7 @@ const Wikitube = (function () {
     )}`;
     state.moreButton.css("background-image", `url(${plusSvgURL})`);
     state.moreButton.click(function () {
-      loadAndRender(false);
+      loadAndRender();
     });
     $("iframe").ready(function () {
       setHorizScroll();
@@ -220,8 +221,7 @@ const Wikitube = (function () {
 
   let context = null;
 
-  function loadAndRender(isFirstLoad) {
-    logger(`loadAndRender called with isFirstLoad: ${isFirstLoad}`);
+  function loadAndRender() {
     const cacheKey = `yt_search_${state.titleText}`;
     const cachedItems = getCachedResponse(cacheKey);
 
@@ -229,10 +229,6 @@ const Wikitube = (function () {
       logger(
         `Processing ${videoItems.length} videos, currently loaded: ${state.numVideosLoaded}`
       );
-      if (isFirstLoad) {
-        logger("First load - setting up container");
-        setupContainer(context.insertBefore);
-      }
       const newVideos = videoItems.slice(
         state.numVideosLoaded,
         state.numVideosLoaded + state.numVideosToLoad
@@ -284,7 +280,8 @@ const Wikitube = (function () {
     // insert placeholder container
     state.titleText = context.titleText;
     state.numVideosToLoad = context.numVideosToLoad;
-    loadAndRender(true);
+    setupContainer(context.insertBefore);
+    loadAndRender();
   }
 
   return { init: init };
