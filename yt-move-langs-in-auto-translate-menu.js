@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Move Preferred YouTube Subtitle Auto-translate Language Options To Top
 // @namespace    Me
-// @version      1.1.3
+// @version      1.1.4
 // @license      AGPLv3
 // @author       jcunews
 // @description  Move preferred YouTube subtitle auto-translate languages to top of the list for quick access, and optionally remove other languages. Users who use non English (US) language in their YouTube setting, must manually edit the script for their chosen language.
-// @match        https://www.youtube.com/*
+// @match        https://www.youtube.com/watch*
+// @noframes
 // @grant        none
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
