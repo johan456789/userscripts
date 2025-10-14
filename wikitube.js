@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.7.2
+// @version      3.7.3
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -251,7 +251,9 @@ const Wikitube = (function () {
     logger("No cached items found, making API request");
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
       state.titleText
-    )}&key=${state.apiKey}&maxResults=50`; // the max allowed by the API
+    )}&key=${
+      state.apiKey
+    }&type=video&videoEmbeddable=true&order=relevance&maxResults=50`; // the max allowed by the API
     logger(`API URL: ${url}`);
 
     $.getJSON(url, function (response) {
