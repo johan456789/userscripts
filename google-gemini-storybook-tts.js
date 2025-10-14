@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.2.2
+// @version      0.2.3
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
+// @match        https://gemini.google.com/gem/storybook
 // @match        https://gemini.google.com/gem/storybook/*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
