@@ -48,7 +48,7 @@ const Wikitube = (function () {
 
   function injectBaseStyles() {
     addGlobalStyle(
-      "#wikitube_container { padding-bottom: 30px; overflow-y:hidden; white-space: nowrap; }"
+      "#wikitube_container { overflow-y:hidden; white-space: nowrap; }"
     );
     addGlobalStyle(
       "#wikitube_container div { position: relative; width: auto; height: 200px; margin-right: 5px; display: inline-block; box-shadow: 0 0 5px #888; }"
