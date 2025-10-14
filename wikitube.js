@@ -31,18 +31,23 @@ const Wikitube = (function () {
     numVideosLoaded: 0,
     container: null,
     moreButton: null,
+    host: null,
+    shadowRoot: null,
     apiKey: "",
   };
 
   function addGlobalStyle(css) {
-    let head, style;
-    head = document.getElementsByTagName("head")[0];
+    const style = document.createElement("style");
+    style.type = "text/css";
+    style.innerHTML = css;
+    if (state && state.shadowRoot) {
+      state.shadowRoot.appendChild(style);
+      return;
+    }
+    const head = document.getElementsByTagName("head")[0];
     if (!head) {
       return;
     }
-    style = document.createElement("style");
-    style.type = "text/css";
-    style.innerHTML = css;
     head.appendChild(style);
   }
 
@@ -179,7 +184,8 @@ const Wikitube = (function () {
   }
 
   function setHorizScroll() {
-    $("#wikitube_container").on("mousewheel DOMMouseScroll", function (e) {
+    if (!state.container) return;
+    state.container.on("mousewheel DOMMouseScroll", function (e) {
       let delt = null;
       if (e.type == "mousewheel") {
         delt = e.originalEvent.wheelDelta * -1;
@@ -195,12 +201,20 @@ const Wikitube = (function () {
 
   function setupContainer(insertBeforeSelector) {
     logger("Setting up container");
+    // Create host and shadow root to isolate styles from the page
+    state.host = document.createElement("div");
+    $(state.host).insertBefore(insertBeforeSelector);
+    state.shadowRoot = state.host.attachShadow({ mode: "open" });
+
+    // Build container and UI inside the shadow root
     state.container = $('<div id="wikitube_container"></div>');
     state.moreButton = $(
       '<div class="plusBtn" title="Load more videos!"></div>'
     );
-    state.container.insertBefore(insertBeforeSelector);
+    // Append container into shadow root, then add the button inside container
+    state.shadowRoot.appendChild(state.container[0]);
     state.container.append(state.moreButton);
+
     const plusSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect x="56" y="24" width="16" height="80" rx="8" fill="white"/><rect x="24" y="56" width="80" height="16" rx="8" fill="white"/></svg>';
     const plusSvgURL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
@@ -210,16 +224,54 @@ const Wikitube = (function () {
     state.moreButton.click(function () {
       loadAndRender();
     });
-    $("iframe").ready(function () {
-      setHorizScroll();
-    });
+
+    // Inject styles into the shadow root and set scroll behavior
+    injectBaseStyles();
+    setHorizScroll();
+    maybeCompensateGlobalInvert();
   }
 
   function addVideosToPage(newVideos) {
     for (let i = 0; i < newVideos.length; i++) {
       const video = newVideos[i];
-      const videoHtml = `<div class="vinc_yt"><iframe width="350" height="200" frameborder="0" allowfullscreen src="//www.youtube.com/embed/${video["id"]["videoId"]}"></iframe></div>`;
-      state.moreButton.before(videoHtml);
+      const wrapper = document.createElement("div");
+      wrapper.className = "vinc_yt";
+      const iframe = document.createElement("iframe");
+      iframe.width = "350";
+      iframe.height = "200";
+      iframe.setAttribute("frameborder", "0");
+      iframe.setAttribute("allowfullscreen", "");
+      iframe.src = `//www.youtube.com/embed/${video["id"]["videoId"]}`;
+      wrapper.appendChild(iframe);
+      state.container[0].insertBefore(wrapper, state.moreButton[0]);
+    }
+  }
+
+  function maybeCompensateGlobalInvert() {
+    // Some dark-mode styles globally invert the page using CSS filters on html/body.
+    // When that happens, embedded iframes appear inverted inside our shadow root.
+    // Detect a global invert and compensate by double-inverting only the iframe when not fullscreen.
+    try {
+      const htmlFilter =
+        window.getComputedStyle(document.documentElement).filter || "";
+      const bodyFilter = document.body
+        ? window.getComputedStyle(document.body).filter || ""
+        : "";
+      const hasInvert =
+        /invert\(/i.test(htmlFilter) || /invert\(/i.test(bodyFilter);
+      if (!hasInvert) return;
+      const style = document.createElement("style");
+      style.type = "text/css";
+      style.textContent =
+        "#wikitube_container iframe:not(:fullscreen):not(:-webkit-full-screen){filter: invert(1) hue-rotate(180deg) !important;}";
+      if (state.shadowRoot) {
+        state.shadowRoot.appendChild(style);
+      } else {
+        const head = document.getElementsByTagName("head")[0];
+        if (head) head.appendChild(style);
+      }
+    } catch (e) {
+      // no-op; best-effort compensation only
     }
   }
 
@@ -274,7 +326,6 @@ const Wikitube = (function () {
 
   function init() {
     state.apiKey = getApiKey();
-    injectBaseStyles();
     if (!isAllowedPath(window.location.pathname)) {
       return;
     }
