@@ -124,7 +124,7 @@ const Wikitube = (function () {
   function determineContext() {
     if ($("#mw-content-text").length) {
       return {
-        titleText: $("#firstHeading")[0].textContent,
+        titleText: $("#firstHeading > span.mw-page-title-main").text(),
         numVideosToLoad: Math.floor($("#bodyContent").width() / 350) + 1,
         insertBefore: "#mw-content-text",
       };
