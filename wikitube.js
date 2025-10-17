@@ -123,8 +123,12 @@ const Wikitube = (function () {
 
   function determineContext() {
     if ($("#mw-content-text").length) {
+      let titleText = $("#firstHeading > span.mw-page-title-main").text();
+      if (!titleText) {
+        titleText = $("#firstHeading").contents().first().text();
+      }
       return {
-        titleText: $("#firstHeading > span.mw-page-title-main").text(),
+        titleText: titleText,
         numVideosToLoad: Math.floor($("#bodyContent").width() / 350) + 1,
         insertBefore: "#mw-content-text",
       };
@@ -243,7 +247,7 @@ const Wikitube = (function () {
     }
 
     if (cachedItems) {
-      logger("Using cached items");
+      logger(`Using cached items (${cacheKey})`);
       processVideos(cachedItems);
       return;
     }
