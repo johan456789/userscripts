@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name      Youtube hide pause overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Hides the pause overlay on YouTube
 // @author       You
 // @match        https://www.youtube.com/*
+// @match        https://www.youtube-nocookie.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
