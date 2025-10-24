@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Maps Language Selector
 // @namespace    http://tampermonkey.net/
-// @version      1.1.2
+// @version      1.1.3
 // @description  Adds a language selector button to Google Maps.
 // @author       You
 // @match        https://www.google.com/maps*
@@ -109,7 +109,7 @@
     "zh-TW": "\u202A繁體中文\u202C",
   };
 
-  const CONTAINER_SELECTOR = "#gb div.gb_Ad";
+  const CONTAINER_SELECTOR = "#gb > div";
   // Only Tc0rEd Zf54rc are required for the white squircle background. Center icon via inline flex styles.
   const BUTTON_WRAPPER_HTML =
     '<div class="gb_z gb_td gb_Pf gb_0"><button class="Tc0rEd Zf54rc" style="display:flex;align-items:center;justify-content:center"><span class="google-symbols" style="font-size: 18px; line-height: 1;"></span></button></div>';
