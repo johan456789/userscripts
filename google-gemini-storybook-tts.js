@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.2.3
+// @version      0.2.4
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -89,27 +89,18 @@ const logger = Logger("[gemini-storybook-tts]");
     return elevenLabsApiKey;
   }
 
-  async function requestAndPlayTTS(text) {
-    // Try cache first to avoid unnecessary API usage
+  async function requestTTS(text) {
     const cached = await getCachedTTSItem(text);
-    if (cached && cached.audioBlob) {
-      const urlFromCache = URL.createObjectURL(cached.audioBlob);
-      const audioFromCache = new Audio(urlFromCache);
-      audioFromCache.addEventListener("ended", () =>
-        URL.revokeObjectURL(urlFromCache)
-      );
-      try {
-        await audioFromCache.play();
-      } catch (err) {
-        logger.error("Audio playback failed (cache)", err);
-      }
-      return;
+    if (cached?.audioBlob) {
+      logger("Cache hit for TTS audio");
+      return cached.audioBlob;
     }
+    logger("Cache miss for TTS audio");
 
     const apiKey = getElevenLabsApiKeyOrPrompt();
     if (!apiKey) {
       logger.warn("ElevenLabs API key missing. Aborting TTS request.");
-      return;
+      return null;
     }
     const voiceId = "g10k86KeEUyBqW9lcKYg";
     const outputFormat = "mp3_44100_128";
@@ -163,19 +154,22 @@ const logger = Logger("[gemini-storybook-tts]");
       const blob = new Blob([buffer], {
         type: contentTypeMatch?.[1]?.trim() || "audio/mpeg",
       });
-      // Cache the result for future use
       cacheTTSItem(text, blob);
-
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.addEventListener("ended", () => URL.revokeObjectURL(url));
-      try {
-        await audio.play();
-      } catch (err) {
-        logger.error("Audio playback failed", err);
-      }
+      return blob;
     } catch (err) {
       logger.error("TTS network error", err);
+      return null;
+    }
+  }
+
+  async function playTTS(audioBlob) {
+    const url = URL.createObjectURL(audioBlob);
+    const audio = new Audio(url);
+    audio.addEventListener("ended", () => URL.revokeObjectURL(url));
+    try {
+      await audio.play();
+    } catch (err) {
+      logger.error("Audio playback failed", err);
     }
   }
 
@@ -304,14 +298,18 @@ const logger = Logger("[gemini-storybook-tts]");
     button.appendChild(label);
 
     // Real TTS request
-    button.addEventListener("click", (e) => {
+    button.addEventListener("click", async (e) => {
       e.stopPropagation();
       const storyText = storyTextEl.textContent?.trim();
       if (!storyText) {
         logger.warn("No story text found to convert to speech.");
         return;
       }
-      requestAndPlayTTS(storyText);
+      const audioBlob = await requestTTS(storyText);
+      if (!audioBlob) {
+        return;
+      }
+      await playTTS(audioBlob);
     });
 
     buttonContainer.appendChild(button);
