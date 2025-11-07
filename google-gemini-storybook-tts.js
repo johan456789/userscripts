@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.2.4
+// @version      0.2.5
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -28,9 +28,12 @@ const logger = Logger("[gemini-storybook-tts]");
   const BUTTON_CONTAINER_CLASS = "userscript-tts-button-container";
   const BUTTON_ID = "userscript-tts-play-btn";
 
-  // Selector to locate the story text on the current page
-  // .hide is dynamically added and removed to the element on storybook page change
+  // Selector to locate all story text paragraphs (including hidden ones)
+  // .hide is dynamically added/removed on the container; filtering happens later
   const STORY_TEXT_SELECTOR =
+    "storybook > div > div.ng-star-inserted > storybook-page > div p.story-text";
+  // Selector to locate the current story text paragraph (not hidden)
+  const CURRENT_STORY_TEXT_SELECTOR =
     "storybook > div > div.ng-star-inserted:not(.hide) > storybook-page.right > div:not(.underneath) p.story-text";
 
   // Simple IndexedDB cache via idb-keyval (loaded via @require)
@@ -92,10 +95,8 @@ const logger = Logger("[gemini-storybook-tts]");
   async function requestTTS(text) {
     const cached = await getCachedTTSItem(text);
     if (cached?.audioBlob) {
-      logger("Cache hit for TTS audio");
       return cached.audioBlob;
     }
-    logger("Cache miss for TTS audio");
 
     const apiKey = getElevenLabsApiKeyOrPrompt();
     if (!apiKey) {
@@ -206,7 +207,7 @@ const logger = Logger("[gemini-storybook-tts]");
    * @returns {HTMLParagraphElement|null}
    */
   function findCurrentStoryText() {
-    const nodes = document.querySelectorAll(STORY_TEXT_SELECTOR);
+    const nodes = document.querySelectorAll(CURRENT_STORY_TEXT_SELECTOR);
     if (nodes.length === 0) {
       logger.error("No story text found. Aborting insertion.");
       return null;
@@ -330,9 +331,13 @@ const logger = Logger("[gemini-storybook-tts]");
    * Core routine: find story text and ensure button exists for the current page.
    */
   function runOnce() {
-    const storyTextEl = findCurrentStoryText();
-    if (!storyTextEl) return;
-    ensureButtonAboveStory(storyTextEl);
+    const allStoryTextEls = Array.from(
+      document.querySelectorAll(STORY_TEXT_SELECTOR)
+    );
+
+    allStoryTextEls.forEach((el) => {
+      ensureButtonAboveStory(el);
+    });
   }
 
   const debouncedRunOnce = debounce(runOnce, 200);
