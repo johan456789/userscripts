@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.7.4
+// @version      3.7.5
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -88,7 +88,12 @@ const Wikitube = (function () {
     const onWikipediaIndex =
       /\.wikipedia\.org$/.test(host) && path === "/w/index.php";
     if (onWikipediaIndex) {
-      articleTitle = new URLSearchParams(window.location.search).get("title");
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get("action");
+      if (action && action.toLowerCase() !== "view") {
+        return false;
+      }
+      articleTitle = params.get("title");
       if (!articleTitle) {
         return false;
       }
