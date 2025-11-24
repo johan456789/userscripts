@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Youtube exit full screen corner
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Adds an invisible bottom-right click area to send ESC and exit fullscreen
 // @author       You
 // @match        https://www.youtube.com/*
@@ -21,8 +21,9 @@ const logger = Logger("[yt-exit-full-screen-corner]");
 
   logger("Script started");
 
+  const VISUAL_DEBUG = false;
   const CLICK_AREA_ID = "yt-esc-corner";
-  const CLICK_AREA_SIZE_PX = 8; // width/height of the click target for robustness
+  const CLICK_AREA_SIZE_PX = 16; // width/height of the click target for robustness
 
   function dispatchEscape() {
     try {
@@ -63,7 +64,8 @@ const logger = Logger("[yt-exit-full-screen-corner]");
     area.style.height = `${CLICK_AREA_SIZE_PX}px`;
     area.style.right = "0";
     area.style.bottom = "0";
-    area.style.opacity = "0"; // invisible but clickable
+    area.style.opacity = VISUAL_DEBUG ? "0.5" : "0"; // visible for debugging
+    area.style.backgroundColor = "red"; // visible background
     area.style.pointerEvents = "auto";
     area.style.zIndex = "2147483647"; // make sure it's on top
     area.addEventListener("click", (e) => {
@@ -96,5 +98,3 @@ const logger = Logger("[yt-exit-full-screen-corner]");
     subtree: true,
   });
 })();
-
-
