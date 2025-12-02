@@ -3,7 +3,7 @@
 // @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
 // @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
 // @namespace    thyu
-// @version      3.7.5
+// @version      3.7.6
 // @description  Adds relevant YouTube videos to Wikipedia & 百度百科
 // @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
 // @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
@@ -116,7 +116,7 @@ const Wikitube = (function () {
     if (!articleTitle) {
       return false;
     }
-    const banned_title_prefixes = ["Help:", "Wikipedia:", "User:", "Special:", "Category:", "Template:"];
+    const banned_title_prefixes = ["Help:", "Wikipedia:", "User:", "Special:", "Category:", "Template:", "Talk:"];
     const banned_titles = ["Main_Page"];
     for (let i = 0; i < banned_title_prefixes.length; i++) {
       if (articleTitle.indexOf(banned_title_prefixes[i]) === 0) {
