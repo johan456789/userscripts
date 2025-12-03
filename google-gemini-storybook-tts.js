@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.3.0
+// @version      0.3.1
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -37,7 +37,7 @@ const logger = Logger("[gemini-storybook-tts]");
   const PAUSE_ICON_SVG =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="16" height="16" aria-hidden="true"><!--Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M176 96C149.5 96 128 117.5 128 144L128 496C128 522.5 149.5 544 176 544L240 544C266.5 544 288 522.5 288 496L288 144C288 117.5 266.5 96 240 96L176 96zM400 96C373.5 96 352 117.5 352 144L352 496C352 522.5 373.5 544 400 544L464 544C490.5 544 512 522.5 512 496L512 144C512 117.5 490.5 96 464 96L400 96z" fill="currentColor"></path></svg>`;
   const SPINNER_ICON_SVG =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M272 112C272 85.5 293.5 64 320 64C346.5 64 368 85.5 368 112C368 138.5 346.5 160 320 160C293.5 160 272 138.5 272 112zM272 528C272 501.5 293.5 480 320 480C346.5 480 368 501.5 368 528C368 554.5 346.5 576 320 576C293.5 576 272 554.5 272 528zM112 272C138.5 272 160 293.5 160 320C160 346.5 138.5 368 112 368C85.5 368 64 346.5 64 320C64 293.5 85.5 272 112 272zM480 320C480 293.5 501.5 272 528 272C554.5 272 576 293.5 576 320C576 346.5 554.5 368 528 368C501.5 368 480 346.5 480 320zM139 433.1C157.8 414.3 188.1 414.3 206.9 433.1C225.7 451.9 225.7 482.2 206.9 501C188.1 519.8 157.8 519.8 139 501C120.2 482.2 120.2 451.9 139 433.1zM139 139C157.8 120.2 188.1 120.2 206.9 139C225.7 157.8 225.7 188.1 206.9 206.9C188.1 225.7 157.8 225.7 139 206.9C120.2 188.1 120.2 157.8 139 139zM501 433.1C519.8 451.9 519.8 482.2 501 501C482.2 519.8 451.9 519.8 433.1 501C414.3 482.2 414.3 451.9 433.1 433.1C451.9 414.3 482.2 414.3 501 433.1z"/></svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="16" height="16" aria-hidden="true"><!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M272 112C272 85.5 293.5 64 320 64C346.5 64 368 85.5 368 112C368 138.5 346.5 160 320 160C293.5 160 272 138.5 272 112zM272 528C272 501.5 293.5 480 320 480C346.5 480 368 501.5 368 528C368 554.5 346.5 576 320 576C293.5 576 272 554.5 272 528zM112 272C138.5 272 160 293.5 160 320C160 346.5 138.5 368 112 368C85.5 368 64 346.5 64 320C64 293.5 85.5 272 112 272zM480 320C480 293.5 501.5 272 528 272C554.5 272 576 293.5 576 320C576 346.5 554.5 368 528 368C501.5 368 480 346.5 480 320zM139 433.1C157.8 414.3 188.1 414.3 206.9 433.1C225.7 451.9 225.7 482.2 206.9 501C188.1 519.8 157.8 519.8 139 501C120.2 482.2 120.2 451.9 139 433.1zM139 139C157.8 120.2 188.1 120.2 206.9 139C225.7 157.8 225.7 188.1 206.9 206.9C188.1 225.7 157.8 225.7 139 206.9C120.2 188.1 120.2 157.8 139 139zM501 433.1C519.8 451.9 519.8 482.2 501 501C482.2 519.8 451.9 519.8 433.1 501C414.3 482.2 414.3 451.9 433.1 433.1C451.9 414.3 482.2 414.3 501 433.1z" fill="currentColor"/></svg>`;
 
   // To avoid "This document requires 'TrustedHTML' assignment" errors.
   // https://stackoverflow.com/a/69309927/6306190
@@ -109,11 +109,14 @@ const logger = Logger("[gemini-storybook-tts]");
     return elevenLabsApiKey;
   }
 
-  async function requestTTS(text) {
+  async function requestTTS(text, options = {}) {
+    const { onBeforeNetwork } = options;
     const cached = await getCachedTTSItem(text);
     if (cached?.audioBlob) {
       return cached.audioBlob;
     }
+
+    onBeforeNetwork?.();
 
     const apiKey = getElevenLabsApiKeyOrPrompt();
     if (!apiKey) {
@@ -212,10 +215,18 @@ const logger = Logger("[gemini-storybook-tts]");
     const icon = button.__ttsIcon;
     if (!label || !icon) return;
 
+    const setButtonDisabled = (disabled) => {
+      button.disabled = disabled;
+      button.style.pointerEvents = disabled ? "none" : "";
+      button.style.cursor = disabled ? "wait" : "pointer";
+      button.style.opacity = disabled ? "0.8" : "";
+    };
+
     if (state === "pause") {
       label.textContent = "Pause";
       icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PAUSE_ICON_SVG);
       button.dataset.ttsState = "pause";
+      setButtonDisabled(false);
       return;
     }
 
@@ -223,13 +234,14 @@ const logger = Logger("[gemini-storybook-tts]");
       label.textContent = "Loading...";
       icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(SPINNER_ICON_SVG);
       button.dataset.ttsState = "loading";
-      // TODO: disable button
+      setButtonDisabled(true);
       return;
     }
 
     label.textContent = "Listen";
     icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PLAY_ICON_SVG);
     button.dataset.ttsState = "listen";
+    setButtonDisabled(false);
   }
 
   const setButtonToPause = (button) => setButtonState(button, "pause");
@@ -271,9 +283,19 @@ const logger = Logger("[gemini-storybook-tts]");
     }
 
     cleanupCurrentPlayback();
+    currentButton = button;
 
-    const audioBlob = await requestTTS(storyText);
+    const audioBlob = await requestTTS(storyText, {
+      onBeforeNetwork: () => {
+        setButtonToLoading(button);
+      },
+    });
+
     if (!audioBlob) {
+      setButtonToListen(button);
+      if (currentButton === button) {
+        currentButton = null;
+      }
       return;
     }
 
@@ -285,9 +307,17 @@ const logger = Logger("[gemini-storybook-tts]");
     currentButton = button;
 
     const handleEnded = () => {
+      if (currentAudio !== audio) {
+        audio.removeEventListener("ended", handleEnded);
+        return;
+      }
       cleanupCurrentPlayback();
     };
     const handleError = (err) => {
+      if (currentAudio !== audio) {
+        audio.removeEventListener("error", handleError);
+        return;
+      }
       logger.error("Audio playback error", err);
       cleanupCurrentPlayback();
     };
@@ -387,6 +417,10 @@ const logger = Logger("[gemini-storybook-tts]");
     // Real TTS request
     button.addEventListener("click", async (e) => {
       e.stopPropagation();
+
+      if (button.dataset.ttsState === "loading") {
+        return;
+      }
 
       // If clicking the currently active button
       if (currentButton === button && currentAudio) {
