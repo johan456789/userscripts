@@ -8,6 +8,7 @@
 // @noframes
 // @version      0.1.0
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-wl-helper.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-wl-helper.js
 // ==/UserScript==
@@ -79,20 +80,20 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
   }
 
   function ensureMenuButtonExists() {
-    const menu = document.querySelector(SELECTORS.playlistMenu);
-    if (!menu) {
-      logger("Playlist menu not found");
-      return false;
+    // Quick check: if button already exists, skip DOM queries
+    if (document.getElementById(IDS.menuButton)) {
+      return true;
     }
 
-    if (menu.querySelector(`#${IDS.menuButton}`)) {
-      return true;
+    const menu = document.querySelector(SELECTORS.playlistMenu);
+    if (!menu) {
+      return false;
     }
 
     const container = getButtonsContainer(menu);
     if (!container) {
-       logger("Buttons container not found in menu");
-       return false;
+      logger("Buttons container not found in menu");
+      return false;
     }
 
     const button = createMenuButton();
@@ -105,12 +106,12 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     return true;
   }
 
+  const debouncedEnsureButton = debounce(ensureMenuButtonExists, 100);
+
   function init() {
     ensureMenuButtonExists();
 
-    const observer = new MutationObserver(() => {
-      ensureMenuButtonExists();
-    });
+    const observer = new MutationObserver(debouncedEnsureButton);
 
     observer.observe(document.body, {
       childList: true,
