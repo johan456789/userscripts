@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.2.6
+// @version      0.3.0
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -26,6 +26,24 @@ const logger = Logger("[gemini-storybook-tts]");
   // Unique id/class markers to avoid duplicate insertions
   const BUTTON_CONTAINER_CLASS = "userscript-tts-button-container";
   const BUTTON_ID = "userscript-tts-play-btn";
+
+  // Global state for audio playback
+  let currentAudio = null;
+  let currentButton = null;
+  let currentAudioUrl = null;
+
+  const PLAY_ICON_SVG =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="16" height="16" aria-hidden="true"><!--Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M187.2 100.9C174.8 94.1 159.8 94.4 147.6 101.6C135.4 108.8 128 121.9 128 136L128 504C128 518.1 135.5 531.2 147.6 538.4C159.7 545.6 174.8 545.9 187.2 539.1L523.2 355.1C536 348.1 544 334.6 544 320C544 305.4 536 291.9 523.2 284.9L187.2 100.9z" fill="currentColor"></path></svg>`;
+  const PAUSE_ICON_SVG =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="16" height="16" aria-hidden="true"><!--Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M176 96C149.5 96 128 117.5 128 144L128 496C128 522.5 149.5 544 176 544L240 544C266.5 544 288 522.5 288 496L288 144C288 117.5 266.5 96 240 96L176 96zM400 96C373.5 96 352 117.5 352 144L352 496C352 522.5 373.5 544 400 544L464 544C490.5 544 512 522.5 512 496L512 144C512 117.5 490.5 96 464 96L400 96z" fill="currentColor"></path></svg>`;
+  const SPINNER_ICON_SVG =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M272 112C272 85.5 293.5 64 320 64C346.5 64 368 85.5 368 112C368 138.5 346.5 160 320 160C293.5 160 272 138.5 272 112zM272 528C272 501.5 293.5 480 320 480C346.5 480 368 501.5 368 528C368 554.5 346.5 576 320 576C293.5 576 272 554.5 272 528zM112 272C138.5 272 160 293.5 160 320C160 346.5 138.5 368 112 368C85.5 368 64 346.5 64 320C64 293.5 85.5 272 112 272zM480 320C480 293.5 501.5 272 528 272C554.5 272 576 293.5 576 320C576 346.5 554.5 368 528 368C501.5 368 480 346.5 480 320zM139 433.1C157.8 414.3 188.1 414.3 206.9 433.1C225.7 451.9 225.7 482.2 206.9 501C188.1 519.8 157.8 519.8 139 501C120.2 482.2 120.2 451.9 139 433.1zM139 139C157.8 120.2 188.1 120.2 206.9 139C225.7 157.8 225.7 188.1 206.9 206.9C188.1 225.7 157.8 225.7 139 206.9C120.2 188.1 120.2 157.8 139 139zM501 433.1C519.8 451.9 519.8 482.2 501 501C482.2 519.8 451.9 519.8 433.1 501C414.3 482.2 414.3 451.9 433.1 433.1C451.9 414.3 482.2 414.3 501 433.1z"/></svg>`
+
+  // To avoid "This document requires 'TrustedHTML' assignment" errors.
+  // https://stackoverflow.com/a/69309927/6306190
+  const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
+    createHTML: (to_escape) => to_escape
+  });
 
   // Selector to locate all story text paragraphs (including hidden ones)
   // .hide is dynamically added/removed on the container; filtering happens later
@@ -162,17 +180,6 @@ const logger = Logger("[gemini-storybook-tts]");
     }
   }
 
-  async function playTTS(audioBlob) {
-    const url = URL.createObjectURL(audioBlob);
-    const audio = new Audio(url);
-    audio.addEventListener("ended", () => URL.revokeObjectURL(url));
-    try {
-      await audio.play();
-    } catch (err) {
-      logger.error("Audio playback failed", err);
-    }
-  }
-
   /**
    * Prevent left-clicks within a container while preserving hover/cursor behavior.
    * Optionally allow clicks within an exception element.
@@ -199,6 +206,106 @@ const logger = Logger("[gemini-storybook-tts]");
     container.dataset.clickBlocked = "1";
   }
 
+  function setButtonState(button, state) {
+    if (!button) return;
+    const label = button.__ttsLabel;
+    const icon = button.__ttsIcon;
+    if (!label || !icon) return;
+
+    if (state === "pause") {
+      label.textContent = "Pause";
+      icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PAUSE_ICON_SVG);
+      button.dataset.ttsState = "pause";
+      return;
+    }
+
+    if (state === "loading") {
+      label.textContent = "Loading...";
+      icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(SPINNER_ICON_SVG);
+      button.dataset.ttsState = "loading";
+      // TODO: disable button
+      return;
+    }
+
+    label.textContent = "Listen";
+    icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PLAY_ICON_SVG);
+    button.dataset.ttsState = "listen";
+  }
+
+  const setButtonToPause = (button) => setButtonState(button, "pause");
+  const setButtonToListen = (button) => setButtonState(button, "listen");
+  const setButtonToLoading = (button) => setButtonState(button, "loading");
+
+  function cleanupCurrentPlayback(resetButton = true) {
+    if (currentAudio) {
+      if (currentAudio.__handleEnded) {
+        currentAudio.removeEventListener("ended", currentAudio.__handleEnded);
+        currentAudio.__handleEnded = null;
+      }
+      if (currentAudio.__handleError) {
+        currentAudio.removeEventListener("error", currentAudio.__handleError);
+        currentAudio.__handleError = null;
+      }
+      currentAudio.pause();
+      currentAudio = null;
+    }
+
+    if (currentAudioUrl) {
+      URL.revokeObjectURL(currentAudioUrl);
+      currentAudioUrl = null;
+    }
+
+    if (resetButton) {
+      if (currentButton) {
+        setButtonToListen(currentButton);
+      }
+      currentButton = null;
+    }
+  }
+
+  async function startPlayback(button, storyTextEl) {
+    const storyText = storyTextEl.textContent?.trim();
+    if (!storyText) {
+      logger.warn("No story text found to convert to speech.");
+      return;
+    }
+
+    cleanupCurrentPlayback();
+
+    const audioBlob = await requestTTS(storyText);
+    if (!audioBlob) {
+      return;
+    }
+
+    const url = URL.createObjectURL(audioBlob);
+    const audio = new Audio(url);
+
+    currentAudio = audio;
+    currentAudioUrl = url;
+    currentButton = button;
+
+    const handleEnded = () => {
+      cleanupCurrentPlayback();
+    };
+    const handleError = (err) => {
+      logger.error("Audio playback error", err);
+      cleanupCurrentPlayback();
+    };
+
+    audio.__handleEnded = handleEnded;
+    audio.__handleError = handleError;
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
+
+    try {
+      await audio.play();
+      setButtonToPause(button);
+    } catch (err) {
+      logger.error("Audio playback failed", err);
+      cleanupCurrentPlayback();
+    }
+  }
+
   /**
    * Finds the current visible story text element. Validates count as requested.
    * - If more than one, logs an error and uses the last one
@@ -220,31 +327,6 @@ const logger = Logger("[gemini-storybook-tts]");
     const el = nodes[nodes.length - 1];
     if (!(el instanceof HTMLElement)) return null;
     return el;
-  }
-
-  /**
-   * Creates the inline SVG play icon element.
-   * @returns {SVGElement}
-   */
-  function createPlayIcon() {
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", "0 0 640 640");
-    svg.setAttribute("width", "16");
-    svg.setAttribute("height", "16");
-    svg.setAttribute("aria-hidden", "true");
-
-    const comment = document.createComment(
-      "Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc."
-    );
-    svg.appendChild(comment);
-
-    const path = document.createElementNS(svgNS, "path");
-    path.setAttribute("d", "M187.2 100.9C174.8 94.1 159.8 94.4 147.6 101.6C135.4 108.8 128 121.9 128 136L128 504C128 518.1 135.5 531.2 147.6 538.4C159.7 545.6 174.8 545.9 187.2 539.1L523.2 355.1C536 348.1 544 334.6 544 320C544 305.4 536 291.9 523.2 284.9L187.2 100.9z");
-    path.setAttribute("fill", "currentColor");
-
-    svg.appendChild(path);
-    return svg;
   }
 
   /**
@@ -288,26 +370,42 @@ const logger = Logger("[gemini-storybook-tts]");
     button.style.fontWeight = "600";
     button.style.margin = "8px 0";
 
-    const icon = createPlayIcon();
+    const iconContainer = document.createElement("span"); // Wrapper for easy icon swapping
+    iconContainer.style.display = "flex"; // Fix alignment
+    iconContainer.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PLAY_ICON_SVG);
+
     const label = document.createElement("span");
     label.textContent = "Listen";
 
-    button.appendChild(icon);
+    button.__ttsIcon = iconContainer;
+    button.__ttsLabel = label;
+
+    button.appendChild(iconContainer);
     button.appendChild(label);
+    setButtonToListen(button);
 
     // Real TTS request
     button.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const storyText = storyTextEl.textContent?.trim();
-      if (!storyText) {
-        logger.warn("No story text found to convert to speech.");
+
+      // If clicking the currently active button
+      if (currentButton === button && currentAudio) {
+        if (currentAudio.paused) {
+          try {
+            await currentAudio.play();
+            setButtonToPause(button);
+          } catch (err) {
+            logger.error("Resume failed", err);
+            setButtonToListen(button); // Revert on error
+          }
+        } else {
+          currentAudio.pause();
+          setButtonToListen(button);
+        }
         return;
       }
-      const audioBlob = await requestTTS(storyText);
-      if (!audioBlob) {
-        return;
-      }
-      await playTTS(audioBlob);
+
+      await startPlayback(button, storyTextEl);
     });
 
     buttonContainer.appendChild(button);
@@ -352,3 +450,4 @@ const logger = Logger("[gemini-storybook-tts]");
     attributes: true,
   });
 })();
+
