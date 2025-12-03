@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.2.5
+// @version      0.2.6
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -11,7 +11,6 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      api.elevenlabs.io
-// @license      MIT
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @require      https://cdn.jsdelivr.net/npm/idb-keyval@6.2.2/dist/umd.js
@@ -230,22 +229,20 @@ const logger = Logger("[gemini-storybook-tts]");
   function createPlayIcon() {
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 640 640");
     svg.setAttribute("width", "16");
     svg.setAttribute("height", "16");
-    svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("aria-hidden", "true");
 
-    const circle = document.createElementNS(svgNS, "circle");
-    circle.setAttribute("cx", "12");
-    circle.setAttribute("cy", "12");
-    circle.setAttribute("r", "10");
-    circle.setAttribute("fill", "#0B57D0");
+    const comment = document.createComment(
+      "Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc."
+    );
+    svg.appendChild(comment);
 
     const path = document.createElementNS(svgNS, "path");
-    path.setAttribute("d", "M9 8l7 4-7 4z");
-    path.setAttribute("fill", "#fff");
+    path.setAttribute("d", "M187.2 100.9C174.8 94.1 159.8 94.4 147.6 101.6C135.4 108.8 128 121.9 128 136L128 504C128 518.1 135.5 531.2 147.6 538.4C159.7 545.6 174.8 545.9 187.2 539.1L523.2 355.1C536 348.1 544 334.6 544 320C544 305.4 536 291.9 523.2 284.9L187.2 100.9z");
+    path.setAttribute("fill", "currentColor");
 
-    svg.appendChild(circle);
     svg.appendChild(path);
     return svg;
   }
