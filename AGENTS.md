@@ -12,3 +12,4 @@ This repo is a collection of userscripts for various websites.
   - Each utility function should be in a separate file.
 - Naming convention for userscripts: `<website_name>-<userscript_name>.js`
 - Edit only one userscript only unless explicitly stated otherwise.
+- All userscripts should have a downloadURL and updateURL. Except for utility functions.
