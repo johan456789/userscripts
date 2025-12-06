@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.3.1
+// @version      0.3.2
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -14,6 +14,8 @@
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @require      https://cdn.jsdelivr.net/npm/idb-keyval@6.2.2/dist/umd.js
+// @downloadURL  https://github.com/johan456789/userscripts/raw/main/google-gemini-storybook-tts.js
+// @updateURL    https://github.com/johan456789/userscripts/raw/main/google-gemini-storybook-tts.js
 // ==/UserScript==
 
 const logger = Logger("[gemini-storybook-tts]");
