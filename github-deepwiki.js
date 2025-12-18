@@ -2,12 +2,14 @@
 // @name                    Jump to DeepWiki from Github
 // @name:zh-CN              Github 跳转至 DeepWiki
 // @namespace               http://tampermonkey.net/
-// @version                 0.1.5
+// @version                 0.2.0
 // @description             Add an anchor to jump to DeepWiki from Github
 // @description:zh-CN       在 Github 页面添加一个链接，跳转至 DeepWiki
 // @match                   *://github.com/*
 // @include                 *://*github*/
 // @license                 MIT
+// @downloadURL             https://github.com/johan456789/userscripts/raw/refs/heads/main/github-deepwiki.js
+// @updateURL               https://github.com/johan456789/userscripts/raw/refs/heads/main/github-deepwiki.js
 // ==/UserScript==
 
 // originally from https://greasyfork.org/en/scripts/534147-jump-to-deepwiki-from-github
@@ -24,27 +26,34 @@ function CreateUI() {
         return;
     }
 
+    const container = document.querySelector('div.Layout-sidebar div.BorderGrid-cell div.hide-sm');
+    if (!container) {
+        return;
+    }
+
+    const children = Array.from(container.querySelectorAll('div.mt-2'));
+    const readmeDiv = children.find(child => child.textContent.trim() === 'Readme');
+
+    if (!readmeDiv) {
+        return;
+    }
+
     const path = window.location.pathname;
     const deepwikiUrl = `https://deepwiki.com${path}`;
 
+    const newElement = document.createElement('div');
+    newElement.className = 'mt-2 deepwiki-anchor';
+
     const anchor = document.createElement('a');
+    anchor.className = 'Link--muted';
     anchor.href = deepwikiUrl;
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
-    anchor.classList.add('Box-sc-g0xbh4-0', 'exSala', 'prc-Button-ButtonBase-c50BI', 'deepwiki-anchor');
-    anchor.setAttribute('data-size', 'small');
-    anchor.setAttribute('data-variant', 'default');
-
-    const anchorContent = document.createElement('span');
-    anchorContent.classList.add('Box-sc-g0xbh4-0', 'gUkoLg', 'prc-Button-ButtonContent-HKbr-');
-
-    const leadingVisual = document.createElement('span');
-    leadingVisual.classList.add('prc-Button-Visual-2epfX', 'prc-Button-VisualWrap-Db-eB');
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
-    svg.setAttribute('class', 'size-4 transform transition-transform duration-700 group-hover:rotate-180 [&_path]:stroke-0');
+    svg.setAttribute('class', 'mr-2 size-4 transform transition-transform duration-700 group-hover:rotate-180 [&_path]:stroke-0');
     svg.setAttribute('viewBox', '110 110 460 500');
     svg.setAttribute('width', '16');
     svg.setAttribute('height', '16');
@@ -69,19 +78,17 @@ function CreateUI() {
     svg.appendChild(path2);
     svg.appendChild(path3);
 
-    leadingVisual.appendChild(svg);
+    anchor.appendChild(svg);
+    anchor.appendChild(document.createTextNode(' DeepWiki')); // must have a space to make it aligned. github is weird.
 
-    const text = document.createElement('span');
-    text.classList.add('prc-Button-Label-pTQ3x');
-    text.textContent = 'DeepWiki';
+    const h3 = document.createElement('h3');
+    h3.className = 'sr-only';
+    h3.textContent = 'Readme';
 
-    anchorContent.appendChild(leadingVisual);
-    anchorContent.appendChild(text);
-    anchor.appendChild(anchorContent);
+    newElement.appendChild(anchor);
+    newElement.appendChild(h3);
 
-    const li = document.createElement('li');
-    li.appendChild(anchor);
-    document.querySelector('ul.pagehead-actions').insertBefore(li, document.querySelector('ul.pagehead-actions').firstChild);
+    container.insertBefore(newElement, readmeDiv);
 }
 
 function checkAndCreateUI() {
@@ -99,8 +106,8 @@ function checkAndCreateUI() {
 
     // 监听页面变化
     const observer = new MutationObserver((mutations) => {
-        // 检查页面头部是否存在
-        if (document.querySelector('.pagehead-actions')) {
+        // 检查侧边栏容器是否存在
+        if (document.querySelector('div.Layout-sidebar div.BorderGrid-cell div.hide-sm')) {
             checkAndCreateUI();
         }
     });
