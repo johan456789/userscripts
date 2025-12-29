@@ -133,12 +133,11 @@ const Wikitube = (() => {
     return true;
   };
 
-  function determineContext() {
+  const determineContext = () => {
     if ($("#mw-content-text").length) {
-      let titleText = $("#firstHeading > span.mw-page-title-main").text();
-      if (!titleText) {
-        titleText = $("#firstHeading").contents().first().text();
-      }
+      const titleText =
+        $("#firstHeading > span.mw-page-title-main").text() ||
+        $("#firstHeading").contents().first().text();
       return {
         titleText,
         numVideosToLoad: Math.floor($("#bodyContent").width() / 350) + 1,
@@ -163,7 +162,7 @@ const Wikitube = (() => {
       };
     }
     return null;
-  }
+  };
 
   const getCachedResponse = (key) => {
     const cached = GM_getValue(key);
@@ -247,7 +246,7 @@ const Wikitube = (() => {
       iframe.height = "200";
       iframe.setAttribute("frameborder", "0");
       iframe.setAttribute("allowfullscreen", "");
-      iframe.src = `//www.youtube.com/embed/${video["id"]["videoId"]}`;
+      iframe.src = `//www.youtube.com/embed/${video.id.videoId}`;
       wrapper.appendChild(iframe);
       state.container[0].insertBefore(wrapper, state.moreButton[0]);
     }
@@ -280,8 +279,6 @@ const Wikitube = (() => {
       // no-op; best-effort compensation only
     }
   };
-
-  let context = null;
 
   const loadAndRender = () => {
     const cacheKey = `yt_search_${state.titleText}`;
@@ -320,10 +317,10 @@ const Wikitube = (() => {
 
     $.getJSON(url, (response) => {
       logger("API response received");
-      if (response && response["items"] && response["items"].length > 0) {
-        logger(`Caching ${response["items"].length} items`);
-        setCachedResponse(cacheKey, response["items"]);
-        processVideos(response["items"]);
+      if (response?.items?.length > 0) {
+        logger(`Caching ${response.items.length} items`);
+        setCachedResponse(cacheKey, response.items);
+        processVideos(response.items);
       } else {
         logger("No items found in API response");
       }
