@@ -1,15 +1,13 @@
 // ==UserScript==
-// @name         Wikitube - YouTube on Wikipedia & Baidu Baike
-// @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
-// @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
+// @name         Wikitube - YouTube on Wikipedia
+// @name:zh-CN   Wikitube - YouTube on 维基百科
+// @name:zh-TW   Wikitube - YouTube on 維基百科
 // @namespace    thyu
-// @version      3.7.7
-// @description  Adds relevant YouTube videos to Wikipedia & 百度百科
-// @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
-// @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
+// @version      3.7.8
+// @description  Adds relevant YouTube videos to Wikipedia
+// @description:zh-cn  Adds relevant YouTube videos to 维基百科
+// @description:zh-TW  Adds relevant YouTube videos to 維基百科
 // @include      http*://*.wikipedia.org/*
-// @include      http*://www.wikiwand.com/*
-// @include      http*://baike.baidu.com/item/*
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js
 // @author       Mark Dunne | http://markdunne.github.io/ | https://chrome.google.com/webstore/detail/wikitube/aneddidibfifdpbeppmpoackniodpekj
 // @developer    vinc, drhouse, thyu
@@ -21,7 +19,7 @@
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // ==/UserScript==
 
-const Wikitube = (function () {
+const Wikitube = (() => {
   const logger = Logger("[Wikitube]");
   const CACHE_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -36,7 +34,7 @@ const Wikitube = (function () {
     apiKey: "",
   };
 
-  function addGlobalStyle(css) {
+  const addGlobalStyle = (css) => {
     const style = document.createElement("style");
     style.type = "text/css";
     style.innerHTML = css;
@@ -49,9 +47,9 @@ const Wikitube = (function () {
       return;
     }
     head.appendChild(style);
-  }
+  };
 
-  function injectBaseStyles() {
+  const injectBaseStyles = () => {
     addGlobalStyle(
       "#wikitube_container { overflow-y:hidden; white-space: nowrap; }"
     );
@@ -64,9 +62,9 @@ const Wikitube = (function () {
     addGlobalStyle(
       "#wikitube_container .plusBtn:hover { background-color: rgb(192, 92, 92); }"
     );
-  }
+  };
 
-  function getApiKey() {
+  const getApiKey = () => {
     let key = GM_getValue("youtubeApiKey", "");
     if (!key) {
       key = prompt(
@@ -78,92 +76,71 @@ const Wikitube = (function () {
       }
     }
     return key;
-  }
+  };
 
-  function isAllowedPath(path) {
+  const isAllowedPath = (path) => {
     logger("Processing path:", path);
-    const host = window.location.hostname;
     let articleTitle = null;
 
-    const onWikipediaIndex =
-      /\.wikipedia\.org$/.test(host) && path === "/w/index.php";
-    if (onWikipediaIndex) {
+    if (path === "/w/index.php") {
       const params = new URLSearchParams(window.location.search);
       const action = params.get("action");
       if (action && action.toLowerCase() !== "view") {
         return false;
       }
       articleTitle = params.get("title");
-      if (!articleTitle) {
-        return false;
-      }
     } else {
       const prefixes = [
         "/wiki/",
-        ...wikipedia_lang_codes.map(function (lang) {
-          return `/${lang}/`;
-        }),
+        ...wikipedia_lang_codes.map((lang) => `/${lang}/`),
       ];
-      for (let i = 0; i < prefixes.length; i++) {
-        const prefix = prefixes[i];
-        if (path.indexOf(prefix) === 0) {
-          articleTitle = path.substring(prefix.length);
-          break;
-        }
+      const prefix = prefixes.find((p) => path.startsWith(p));
+      if (prefix) {
+        articleTitle = path.substring(prefix.length);
       }
     }
 
     if (!articleTitle) {
       return false;
     }
-    const banned_title_prefixes = ["Help:", "Wikipedia:", "User:", "Special:", "Category:", "Template:", "Talk:", "File:"];
+
+    const banned_title_prefixes = [
+      "Help:",
+      "Wikipedia:",
+      "User:",
+      "Special:",
+      "Category:",
+      "Template:",
+      "Talk:",
+      "File:",
+    ];
     const banned_titles = ["Main_Page"];
-    for (let i = 0; i < banned_title_prefixes.length; i++) {
-      if (articleTitle.indexOf(banned_title_prefixes[i]) === 0) {
-        return false;
-      }
+    if (
+      banned_title_prefixes.some((prefix) => articleTitle.startsWith(prefix))
+    ) {
+      return false;
     }
-    for (let j = 0; j < banned_titles.length; j++) {
-      if (articleTitle === banned_titles[j]) {
-        return false;
-      }
+    if (banned_titles.includes(articleTitle)) {
+      return false;
     }
     return true;
-  }
+  };
 
-  function determineContext() {
+  const determineContext = () => {
     if ($("#mw-content-text").length) {
-      let titleText = $("#firstHeading > span.mw-page-title-main").text();
-      if (!titleText) {
-        titleText = $("#firstHeading").contents().first().text();
-      }
+      const titleText =
+        $("#firstHeading > span.mw-page-title-main").text() ||
+        $("#firstHeading").contents().first().text();
       return {
-        titleText: titleText,
+        titleText,
         numVideosToLoad: Math.floor($("#bodyContent").width() / 350) + 1,
         insertBefore: "#mw-content-text",
       };
-    } else if ($(".main-content").length) {
-      return {
-        titleText: $(".lemmaWgt-lemmaTitle-title h1")[0].textContent,
-        numVideosToLoad:
-          Math.floor(
-            $(".body-wrapper .content-wrapper .content").width() / 350
-          ) + 1,
-        insertBefore: ".main-content",
-      };
-    } else if ($("#fullContent").length) {
-      return {
-        titleText: $(".firstHeading > span").text(),
-        numVideosToLoad: Math.floor(
-          $("#article_content_wrapper").width() / 350
-        ),
-        insertBefore: "#fullContent",
-      };
     }
     return null;
-  }
+  };
 
-  function getCachedResponse(key) {
+  const getCachedResponse = (key) => {
     const cached = GM_getValue(key);
     if (!cached) return null;
     try {
@@ -181,20 +158,20 @@ const Wikitube = (function () {
     } catch (e) {
       return null;
     }
-  }
+  };
 
-  function setCachedResponse(key, data) {
-    const cacheObj = { timestamp: Date.now(), data: data };
+  const setCachedResponse = (key, data) => {
+    const cacheObj = { timestamp: Date.now(), data };
     GM_setValue(key, JSON.stringify(cacheObj));
-  }
+  };
 
-  function setHorizScroll() {
+  const setHorizScroll = () => {
     if (!state.container) return;
     state.container.on("mousewheel DOMMouseScroll", function (e) {
       let delt = null;
-      if (e.type == "mousewheel") {
+      if (e.type === "mousewheel") {
         delt = e.originalEvent.wheelDelta * -1;
-      } else if (e.type == "DOMMouseScroll") {
+      } else if (e.type === "DOMMouseScroll") {
         delt = 40 * e.originalEvent.detail;
       }
       if (delt) {
@@ -202,9 +179,9 @@ const Wikitube = (function () {
         $(this).scrollLeft(delt + $(this).scrollLeft());
       }
     });
-  }
+  };
 
-  function setupContainer(insertBeforeSelector) {
+  const setupContainer = (insertBeforeSelector) => {
     logger("Setting up container");
     // Create host and shadow root to isolate styles from the page
     state.host = document.createElement("div");
@@ -226,7 +203,7 @@ const Wikitube = (function () {
       plusSvg
     )}`;
     state.moreButton.css("background-image", `url(${plusSvgURL})`);
-    state.moreButton.click(function () {
+    state.moreButton.click(() => {
       loadAndRender();
     });
 
@@ -234,11 +211,10 @@ const Wikitube = (function () {
     injectBaseStyles();
     setHorizScroll();
     maybeCompensateGlobalInvert();
-  }
+  };
 
-  function addVideosToPage(newVideos) {
-    for (let i = 0; i < newVideos.length; i++) {
-      const video = newVideos[i];
+  const addVideosToPage = (newVideos) => {
+    for (const video of newVideos) {
       const wrapper = document.createElement("div");
       wrapper.className = "vinc_yt";
       const iframe = document.createElement("iframe");
@@ -246,13 +222,13 @@ const Wikitube = (function () {
       iframe.height = "200";
       iframe.setAttribute("frameborder", "0");
       iframe.setAttribute("allowfullscreen", "");
-      iframe.src = `//www.youtube.com/embed/${video["id"]["videoId"]}`;
+      iframe.src = `//www.youtube.com/embed/${video.id.videoId}`;
       wrapper.appendChild(iframe);
       state.container[0].insertBefore(wrapper, state.moreButton[0]);
     }
-  }
+  };
 
-  function maybeCompensateGlobalInvert() {
+  const maybeCompensateGlobalInvert = () => {
     // Some dark-mode styles globally invert the page using CSS filters on html/body.
     // When that happens, embedded iframes appear inverted inside our shadow root.
     // Detect a global invert and compensate by double-inverting only the iframe when not fullscreen.
@@ -278,15 +254,13 @@ const Wikitube = (function () {
     } catch (e) {
       // no-op; best-effort compensation only
     }
-  }
+  };
 
-  let context = null;
-
-  function loadAndRender() {
+  const loadAndRender = () => {
     const cacheKey = `yt_search_${state.titleText}`;
     const cachedItems = getCachedResponse(cacheKey);
 
-    function processVideos(videoItems) {
+    const processVideos = (videoItems) => {
       logger(
         `Processing ${videoItems.length} videos, currently loaded: ${state.numVideosLoaded}`
       );
@@ -301,7 +275,7 @@ const Wikitube = (function () {
       if (state.moreButton && state.numVideosLoaded >= videoItems.length) {
         state.moreButton.css("display", "none");
       }
-    }
+    };
 
     if (cachedItems) {
       logger(`Using cached items (${cacheKey})`);
@@ -317,19 +291,19 @@ const Wikitube = (function () {
     }&type=video&videoEmbeddable=true&order=relevance&maxResults=50`; // the max allowed by the API
     logger(`API URL: ${url}`);
 
-    $.getJSON(url, function (response) {
+    $.getJSON(url, (response) => {
       logger("API response received");
-      if (response && response["items"] && response["items"].length > 0) {
-        logger(`Caching ${response["items"].length} items`);
-        setCachedResponse(cacheKey, response["items"]);
-        processVideos(response["items"]);
+      if (response?.items?.length > 0) {
+        logger(`Caching ${response.items.length} items`);
+        setCachedResponse(cacheKey, response.items);
+        processVideos(response.items);
       } else {
         logger("No items found in API response");
       }
     });
-  }
+  };
 
-  function init() {
+  const init = () => {
     state.apiKey = getApiKey();
     if (!isAllowedPath(window.location.pathname)) {
       return;
@@ -340,16 +314,17 @@ const Wikitube = (function () {
       return;
     }
     // insert placeholder container
-    state.titleText = context.titleText;
-    state.numVideosToLoad = context.numVideosToLoad;
-    setupContainer(context.insertBefore);
+    const { titleText, numVideosToLoad, insertBefore } = context;
+    state.titleText = titleText;
+    state.numVideosToLoad = numVideosToLoad;
+    setupContainer(insertBefore);
     loadAndRender();
-  }
+  };
 
-  return { init: init };
+  return { init };
 })();
 
-$(document).ready(function () {
+$(() => {
   Wikitube.init();
 });
 
