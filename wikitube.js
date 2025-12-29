@@ -1,15 +1,13 @@
 // ==UserScript==
-// @name         Wikitube - YouTube on Wikipedia & Baidu Baike
-// @name:zh-CN   Wikitube - YouTube on 维基百科 & 百度百科
-// @name:zh-TW   Wikitube - YouTube on 維基百科 & 百度百科
+// @name         Wikitube - YouTube on Wikipedia
+// @name:zh-CN   Wikitube - YouTube on 维基百科
+// @name:zh-TW   Wikitube - YouTube on 維基百科
 // @namespace    thyu
-// @version      3.7.7
-// @description  Adds relevant YouTube videos to Wikipedia & 百度百科
-// @description:zh-cn  Adds relevant YouTube videos to 维基百科 & 百度百科
-// @description:zh-TW  Adds relevant YouTube videos to 維基百科 & 百度百科
+// @version      3.7.8
+// @description  Adds relevant YouTube videos to Wikipedia
+// @description:zh-cn  Adds relevant YouTube videos to 维基百科
+// @description:zh-TW  Adds relevant YouTube videos to 維基百科
 // @include      http*://*.wikipedia.org/*
-// @include      http*://www.wikiwand.com/*
-// @include      http*://baike.baidu.com/item/*
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js
 // @author       Mark Dunne | http://markdunne.github.io/ | https://chrome.google.com/webstore/detail/wikitube/aneddidibfifdpbeppmpoackniodpekj
 // @developer    vinc, drhouse, thyu
@@ -82,21 +80,15 @@ const Wikitube = (() => {
 
   const isAllowedPath = (path) => {
     logger("Processing path:", path);
-    const host = window.location.hostname;
     let articleTitle = null;
 
-    const onWikipediaIndex =
-      /\.wikipedia\.org$/.test(host) && path === "/w/index.php";
-    if (onWikipediaIndex) {
+    if (path === "/w/index.php") {
       const params = new URLSearchParams(window.location.search);
       const action = params.get("action");
       if (action && action.toLowerCase() !== "view") {
         return false;
       }
       articleTitle = params.get("title");
-      if (!articleTitle) {
-        return false;
-      }
     } else {
       const prefixes = [
         "/wiki/",
@@ -111,6 +103,7 @@ const Wikitube = (() => {
     if (!articleTitle) {
       return false;
     }
+
     const banned_title_prefixes = [
       "Help:",
       "Wikipedia:",
@@ -142,23 +135,6 @@ const Wikitube = (() => {
         titleText,
         numVideosToLoad: Math.floor($("#bodyContent").width() / 350) + 1,
         insertBefore: "#mw-content-text",
-      };
-    } else if ($(".main-content").length) {
-      return {
-        titleText: $(".lemmaWgt-lemmaTitle-title h1")[0].textContent,
-        numVideosToLoad:
-          Math.floor(
-            $(".body-wrapper .content-wrapper .content").width() / 350
-          ) + 1,
-        insertBefore: ".main-content",
-      };
-    } else if ($("#fullContent").length) {
-      return {
-        titleText: $(".firstHeading > span").text(),
-        numVideosToLoad: Math.floor(
-          $("#article_content_wrapper").width() / 350
-        ),
-        insertBefore: "#fullContent",
       };
     }
     return null;
