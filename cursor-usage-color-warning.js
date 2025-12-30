@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cursor Usage Color Warning
 // @namespace    http://tampermonkey.net/
-// @version      0.5.2
+// @version      0.5.3
 // @description  Modifies the usage bar color on cursor.com/dashboard based on prorated usage.
 // @author       You
 // @match        https://www.cursor.com/dashboard*
@@ -32,8 +32,8 @@
 
   // --- Configuration -- -
   const USAGE_ELEMENT_SELECTOR =
-    ".bg-brand-dashboard-card .flex.items-baseline";
-  const USAGE_BAR_SELECTOR = ".bg-brand-dashboard-card .h-1.w-full.flex";
+    "body > main > div > div.ease.container.py-16.transition-opacity.duration-150.opacity-100 > div > div > div.md\\:col-span-3 > div > div.rounded-lg.p-4 > div > div.flex.flex-col.gap-4.p-2 > div.flex.w-full.min-w-0.flex-col.gap-2 > div.flex.w-full.min-w-0.items-baseline.gap-1\\.5.overflow-hidden";
+  const USAGE_BAR_SELECTOR = "body > main > div > div.ease.container.py-16.transition-opacity.duration-150.opacity-100 > div > div > div.md\\:col-span-3 > div > div.rounded-lg.p-4 > div > div.flex.flex-col.gap-4.p-2 > div.flex.w-full.min-w-0.flex-col.gap-2 > div.flex.h-1.w-full.gap-px";
   const RESET_DAY_OF_MONTH = 7; // 7th of the month
   // const RESET_TIMEZONE = "Asia/Shanghai"; // UTC+8
 
