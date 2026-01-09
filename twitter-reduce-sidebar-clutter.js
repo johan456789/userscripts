@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Reduce Sidebar Clutter
 // @namespace    http://tampermonkey.net/
-// @version      1.0.4
+// @version      1.0.5
 // @description  Move less-used items from sidebar to overflow menu.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -37,6 +37,7 @@ const overflowMenuSelector = 'div[role="menu"] > div > div > div > div'; // the 
 
   const ITEMS_TO_MOVE = [
     'a[href="/i/grok"]',
+    'a[href="/i/chat"]',
     'a[href="/jobs"]',
     'a[href="/i/premium_sign_up"]',
     'a[href="/i/verified-orgs-signup"]',
