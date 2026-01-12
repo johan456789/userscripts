@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Reduce Sidebar Clutter
 // @namespace    http://tampermonkey.net/
-// @version      1.0.5
+// @version      1.0.6
 // @description  Move less-used items from sidebar to overflow menu.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -35,15 +35,22 @@ const overflowMenuSelector = 'div[role="menu"] > div > div > div > div'; // the 
 (function () {
   "use strict";
 
-  const ITEMS_TO_MOVE = [
-    'a[href="/i/grok"]',
-    'a[href="/i/chat"]',
-    'a[href="/jobs"]',
-    'a[href="/i/premium_sign_up"]',
-    'a[href="/i/verified-orgs-signup"]',
-    'a[href="/i/communitynotes"]',
-    'a[href="/i/premium-business"]',
+  const linksToMove = [
+    '/i/grok',
+    '/i/chat',
+    '/jobs',
+    '/i/premium_sign_up',
+    '/i/verified-orgs-signup',
+    '/i/communitynotes',
+    '/i/premium-business',
+    '/i/jf/creators/studio',
   ];
+
+  function hrefToSelector(href) {
+    return `a[href="${href}"]`;
+  }
+
+  const ITEMS_TO_MOVE = linksToMove.map(hrefToSelector);
 
   function getUsernameFromAccountSwitcher() {
     const accountSwitcherButton = document.querySelector(
@@ -136,7 +143,7 @@ const overflowMenuSelector = 'div[role="menu"] > div > div > div > div'; // the 
   waitForElement(moreButtonSelector, (moreButton) => {
     const username = resolveUsername();
     if (username) {
-      const listsSelector = `a[href="/${username}/lists"]`;
+      const listsSelector = hrefToSelector(`/${username}/lists`);
       if (!ITEMS_TO_MOVE.includes(listsSelector)) {
         ITEMS_TO_MOVE.push(listsSelector);
         logger(`Prepared to move lists for @${username}.`);
