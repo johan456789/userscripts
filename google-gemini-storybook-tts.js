@@ -345,12 +345,25 @@ const logger = Logger("[gemini-storybook-tts]");
     const audio = player?.audio;
     const progress = player?.progress;
     if (!audio || !progress) return;
-    const duration = audio.duration;
+    const duration = Number.isFinite(audio.duration)
+      ? audio.duration
+      : player.lastDuration;
+    const currentTime = Number.isFinite(audio.currentTime)
+      ? audio.currentTime
+      : player.lastTime;
+    if (Number.isFinite(duration)) {
+      player.lastDuration = duration;
+    }
+    if (!player.isSeeking && Number.isFinite(currentTime)) {
+      player.lastTime = currentTime;
+    }
     const canSeek = Number.isFinite(duration) && duration > 0;
     progress.disabled = !canSeek;
     progress.max = canSeek ? duration : 0;
     if (!player.isSeeking) {
-      progress.value = canSeek ? audio.currentTime : 0;
+      progress.value = canSeek && Number.isFinite(player.lastTime)
+        ? player.lastTime
+        : 0;
     }
   }
 
@@ -364,39 +377,52 @@ const logger = Logger("[gemini-storybook-tts]");
     }
   }
 
-  function cleanupCurrentPlayback(resetPlayer = true) {
+  function cleanupCurrentPlayback(options = {}) {
+    const { resetPlayer = true, disposeAudio = true } = options;
+    if (currentPlayer && currentAudio) {
+      if (Number.isFinite(currentAudio.currentTime)) {
+        currentPlayer.lastTime = currentAudio.currentTime;
+      }
+      if (Number.isFinite(currentAudio.duration)) {
+        currentPlayer.lastDuration = currentAudio.duration;
+      }
+      setPlayerToListen(currentPlayer);
+      updateProgressUI(currentPlayer);
+    }
+
     if (currentAudio) {
-      if (currentAudio.__handleEnded) {
-        currentAudio.removeEventListener("ended", currentAudio.__handleEnded);
-        currentAudio.__handleEnded = null;
-      }
-      if (currentAudio.__handleError) {
-        currentAudio.removeEventListener("error", currentAudio.__handleError);
-        currentAudio.__handleError = null;
-      }
-      if (currentAudio.__handleTimeUpdate) {
-        currentAudio.removeEventListener(
-          "timeupdate",
-          currentAudio.__handleTimeUpdate
-        );
-        currentAudio.__handleTimeUpdate = null;
-      }
-      if (currentAudio.__handleLoadedMeta) {
-        currentAudio.removeEventListener(
-          "loadedmetadata",
-          currentAudio.__handleLoadedMeta
-        );
-        currentAudio.__handleLoadedMeta = null;
-      }
-      if (currentAudio.__handleDurationChange) {
-        currentAudio.removeEventListener(
-          "durationchange",
-          currentAudio.__handleDurationChange
-        );
-        currentAudio.__handleDurationChange = null;
+      if (disposeAudio) {
+        if (currentAudio.__handleEnded) {
+          currentAudio.removeEventListener("ended", currentAudio.__handleEnded);
+          currentAudio.__handleEnded = null;
+        }
+        if (currentAudio.__handleError) {
+          currentAudio.removeEventListener("error", currentAudio.__handleError);
+          currentAudio.__handleError = null;
+        }
+        if (currentAudio.__handleTimeUpdate) {
+          currentAudio.removeEventListener(
+            "timeupdate",
+            currentAudio.__handleTimeUpdate
+          );
+          currentAudio.__handleTimeUpdate = null;
+        }
+        if (currentAudio.__handleLoadedMeta) {
+          currentAudio.removeEventListener(
+            "loadedmetadata",
+            currentAudio.__handleLoadedMeta
+          );
+          currentAudio.__handleLoadedMeta = null;
+        }
+        if (currentAudio.__handleDurationChange) {
+          currentAudio.removeEventListener(
+            "durationchange",
+            currentAudio.__handleDurationChange
+          );
+          currentAudio.__handleDurationChange = null;
+        }
       }
       currentAudio.pause();
-      currentAudio = null;
     }
 
     if (currentPlayer?.streamAbort) {
@@ -404,18 +430,22 @@ const logger = Logger("[gemini-storybook-tts]");
       currentPlayer.streamAbort = null;
     }
 
-    if (currentAudioUrl) {
+    if (disposeAudio && currentAudioUrl) {
       URL.revokeObjectURL(currentAudioUrl);
       currentAudioUrl = null;
     }
 
-    if (resetPlayer && currentPlayer) {
-      resetPlayerUI(currentPlayer);
-      if (currentPlayer.audioUrl) {
+    if (currentPlayer) {
+      if (resetPlayer) {
+        resetPlayerUI(currentPlayer);
+      }
+      if (disposeAudio && currentPlayer.audioUrl) {
         currentPlayer.audioUrl = null;
         currentPlayer.audio = null;
       }
     }
+
+    currentAudio = null;
     currentPlayer = null;
   }
 
@@ -517,6 +547,27 @@ const logger = Logger("[gemini-storybook-tts]");
   }
 
   function attachAudioHandlers(player, audio) {
+    if (
+      Number.isFinite(player.lastTime) &&
+      player.lastTime > 0 &&
+      !Number.isFinite(audio.duration)
+    ) {
+      const applyStoredTime = () => {
+        if (
+          Number.isFinite(audio.duration) &&
+          player.lastTime <= audio.duration
+        ) {
+          try {
+            audio.currentTime = player.lastTime;
+          } catch (err) {
+            logger.warn("Failed to restore playback position", err);
+          }
+        }
+        audio.removeEventListener("loadedmetadata", applyStoredTime);
+      };
+      audio.addEventListener("loadedmetadata", applyStoredTime);
+    }
+
     const handleEnded = () => {
       if (currentAudio !== audio) {
         audio.removeEventListener("ended", handleEnded);
@@ -562,8 +613,29 @@ const logger = Logger("[gemini-storybook-tts]");
       return;
     }
 
-    cleanupCurrentPlayback();
+    cleanupCurrentPlayback({ resetPlayer: false, disposeAudio: false });
     currentPlayer = player;
+
+    if (player.audio && player.audioUrl) {
+      currentAudio = player.audio;
+      currentAudioUrl = player.audioUrl;
+      if (Number.isFinite(player.lastTime)) {
+        try {
+          currentAudio.currentTime = player.lastTime;
+        } catch (err) {
+          logger.warn("Failed to restore playback position", err);
+        }
+      }
+      try {
+        await currentAudio.play();
+        setPlayerToPause(player);
+        updateProgressUI(player);
+      } catch (err) {
+        logger.error("Audio playback failed", err);
+        cleanupCurrentPlayback();
+      }
+      return;
+    }
 
     let cachedBlob = player.cachedBlob;
     if (!cachedBlob && player.cachePromise) {
@@ -608,6 +680,13 @@ const logger = Logger("[gemini-storybook-tts]");
     }
 
     try {
+      if (Number.isFinite(player.lastTime)) {
+        try {
+          audio.currentTime = player.lastTime;
+        } catch (err) {
+          logger.warn("Failed to restore playback position", err);
+        }
+      }
       await audio.play();
       setPlayerToPause(player);
       updateProgressUI(player);
@@ -734,6 +813,8 @@ const logger = Logger("[gemini-storybook-tts]");
       cachePromise: null,
       streamAbort: null,
       isSeeking: false,
+      lastTime: 0,
+      lastDuration: 0,
     };
 
     // Build the player UI
@@ -751,6 +832,7 @@ const logger = Logger("[gemini-storybook-tts]");
     wrapper.style.width = "100%";
     wrapper.style.margin = "8px 0";
     wrapper.style.boxSizing = "border-box";
+    wrapper.style.minWidth = "0";
 
     const playButton = document.createElement("button");
     playButton.className = "userscript-tts-play-button";
@@ -789,6 +871,8 @@ const logger = Logger("[gemini-storybook-tts]");
     progress.step = "0.1";
     progress.disabled = true;
     progress.style.flex = "1 1 auto";
+    progress.style.width = "100%";
+    progress.style.minWidth = "0";
     progress.style.accentColor = "#1A73E8";
     progress.style.height = "4px";
     progress.style.cursor = "pointer";
@@ -857,6 +941,11 @@ const logger = Logger("[gemini-storybook-tts]");
         const target = Number(progress.value);
         if (Number.isFinite(target)) {
           player.audio.currentTime = target;
+        }
+      } else if (!progress.disabled) {
+        const target = Number(progress.value);
+        if (Number.isFinite(target)) {
+          player.lastTime = target;
         }
       }
     };
