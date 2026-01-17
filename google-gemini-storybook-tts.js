@@ -26,12 +26,11 @@ const logger = Logger("[gemini-storybook-tts]");
   logger("Script started");
 
   // Unique id/class markers to avoid duplicate insertions
-  const BUTTON_CONTAINER_CLASS = "userscript-tts-button-container";
-  const BUTTON_ID = "userscript-tts-play-btn";
+  const PLAYER_CONTAINER_CLASS = "userscript-tts-player-container";
 
   // Global state for audio playback
   let currentAudio = null;
-  let currentButton = null;
+  let currentPlayer = null;
   let currentAudioUrl = null;
 
   const PLAY_ICON_SVG =
@@ -111,20 +110,12 @@ const logger = Logger("[gemini-storybook-tts]");
     return elevenLabsApiKey;
   }
 
-  async function requestTTS(text, options = {}) {
-    const { onBeforeNetwork } = options;
-    const cached = await getCachedTTSItem(text);
-    if (cached?.audioBlob) {
-      return cached.audioBlob;
-    }
+  function getContentTypeFromHeaders(headers) {
+    const contentTypeMatch = /content-type:\s*([^\n]+)/i.exec(headers || "");
+    return contentTypeMatch?.[1]?.trim() || "audio/mpeg";
+  }
 
-    onBeforeNetwork?.();
-
-    const apiKey = getElevenLabsApiKeyOrPrompt();
-    if (!apiKey) {
-      logger.warn("ElevenLabs API key missing. Aborting TTS request.");
-      return null;
-    }
+  function buildTTSRequestPayload(text) {
     const voiceId = "g10k86KeEUyBqW9lcKYg";
     const outputFormat = "mp3_44100_128";
     const modelId = "eleven_flash_v2_5"; // or eleven_multilingual_v2
@@ -133,13 +124,28 @@ const logger = Logger("[gemini-storybook-tts]");
       speed: 0.8,
     };
 
-    const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=${outputFormat}`;
-    const payload = {
-      text: text,
-      model_id: modelId,
-      language_code: languageCode,
-      voice_settings: voiceSettings,
+    return {
+      endpoint: `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=${outputFormat}`,
+      payload: {
+        text: text,
+        model_id: modelId,
+        language_code: languageCode,
+        voice_settings: voiceSettings,
+      },
     };
+  }
+
+  async function requestTTSArrayBuffer(text, options = {}) {
+    const { onBeforeNetwork } = options;
+    onBeforeNetwork?.();
+
+    const apiKey = getElevenLabsApiKeyOrPrompt();
+    if (!apiKey) {
+      logger.warn("ElevenLabs API key missing. Aborting TTS request.");
+      return null;
+    }
+
+    const { endpoint, payload } = buildTTSRequestPayload(text);
 
     try {
       const { buffer, headers } = await new Promise((resolve, reject) => {
@@ -173,9 +179,8 @@ const logger = Logger("[gemini-storybook-tts]");
         });
       });
 
-      const contentTypeMatch = /content-type:\s*([^\n]+)/i.exec(headers || "");
       const blob = new Blob([buffer], {
-        type: contentTypeMatch?.[1]?.trim() || "audio/mpeg",
+        type: getContentTypeFromHeaders(headers),
       });
       cacheTTSItem(text, blob);
       return blob;
@@ -183,6 +188,92 @@ const logger = Logger("[gemini-storybook-tts]");
       logger.error("TTS network error", err);
       return null;
     }
+  }
+
+  async function requestTTSStream(text, options = {}) {
+    const { onBeforeNetwork } = options;
+    onBeforeNetwork?.();
+
+    const apiKey = getElevenLabsApiKeyOrPrompt();
+    if (!apiKey) {
+      logger.warn("ElevenLabs API key missing. Aborting TTS request.");
+      return null;
+    }
+
+    const { endpoint, payload } = buildTTSRequestPayload(text);
+
+    let streamResponse = null;
+    try {
+      streamResponse = await new Promise((resolve, reject) => {
+        const request = GM_xmlhttpRequest({
+          method: "POST",
+          url: endpoint,
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          data: JSON.stringify(payload),
+          responseType: "stream",
+          timeout: 15000,
+          onload: (res) => {
+            if (res.status >= 200 && res.status < 300 && res.response) {
+              resolve({ res, abort: () => request.abort() });
+            } else {
+              reject(
+                new Error(
+                  `TTS request failed with status ${res.status}: ${res.responseText}`
+                )
+              );
+            }
+          },
+          onerror: (res) => {
+            reject(new Error(`TTS request error: ${res?.status || "unknown"}`));
+          },
+          ontimeout: () => {
+            reject(new Error("TTS request timed out"));
+          },
+        });
+      });
+    } catch (err) {
+      logger.warn("Streaming request unavailable, falling back", err);
+      streamResponse = null;
+    }
+
+    const response = streamResponse?.res?.response;
+    if (response && typeof response.getReader === "function") {
+      return {
+        type: "stream",
+        stream: response,
+        contentType: getContentTypeFromHeaders(
+          streamResponse.res.responseHeaders
+        ),
+        abort: streamResponse.abort,
+      };
+    }
+
+    if (response instanceof ArrayBuffer) {
+      const blob = new Blob([response], {
+        type: getContentTypeFromHeaders(streamResponse.res.responseHeaders),
+      });
+      cacheTTSItem(text, blob);
+      return { type: "blob", blob };
+    }
+
+    if (
+      response &&
+      response.buffer instanceof ArrayBuffer &&
+      Number.isFinite(response.byteLength)
+    ) {
+      const blob = new Blob([response.buffer], {
+        type: getContentTypeFromHeaders(streamResponse.res.responseHeaders),
+      });
+      cacheTTSItem(text, blob);
+      return { type: "blob", blob };
+    }
+
+    const blob = await requestTTSArrayBuffer(text);
+    if (!blob) return null;
+    return { type: "blob", blob };
   }
 
   /**
@@ -211,21 +302,20 @@ const logger = Logger("[gemini-storybook-tts]");
     container.dataset.clickBlocked = "1";
   }
 
-  function setButtonState(button, state) {
-    if (!button) return;
-    const label = button.__ttsLabel;
-    const icon = button.__ttsIcon;
-    if (!label || !icon) return;
+  function setPlayerState(player, state) {
+    if (!player) return;
+    const button = player.playButton;
+    const icon = player.playIcon;
+    if (!button || !icon) return;
 
     const setButtonDisabled = (disabled) => {
       button.disabled = disabled;
       button.style.pointerEvents = disabled ? "none" : "";
       button.style.cursor = disabled ? "wait" : "pointer";
-      button.style.opacity = disabled ? "0.8" : "";
+      button.style.opacity = disabled ? "0.7" : "";
     };
 
     if (state === "pause") {
-      label.textContent = "Pause";
       icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PAUSE_ICON_SVG);
       button.dataset.ttsState = "pause";
       setButtonDisabled(false);
@@ -233,24 +323,45 @@ const logger = Logger("[gemini-storybook-tts]");
     }
 
     if (state === "loading") {
-      label.textContent = "Loading...";
       icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(SPINNER_ICON_SVG);
       button.dataset.ttsState = "loading";
       setButtonDisabled(true);
       return;
     }
 
-    label.textContent = "Listen";
     icon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PLAY_ICON_SVG);
     button.dataset.ttsState = "listen";
     setButtonDisabled(false);
   }
 
-  const setButtonToPause = (button) => setButtonState(button, "pause");
-  const setButtonToListen = (button) => setButtonState(button, "listen");
-  const setButtonToLoading = (button) => setButtonState(button, "loading");
+  const setPlayerToPause = (player) => setPlayerState(player, "pause");
+  const setPlayerToListen = (player) => setPlayerState(player, "listen");
+  const setPlayerToLoading = (player) => setPlayerState(player, "loading");
 
-  function cleanupCurrentPlayback(resetButton = true) {
+  function updateProgressUI(player) {
+    const audio = player?.audio;
+    const progress = player?.progress;
+    if (!audio || !progress) return;
+    const duration = audio.duration;
+    const canSeek = Number.isFinite(duration) && duration > 0;
+    progress.disabled = !canSeek;
+    progress.max = canSeek ? duration : 0;
+    if (!player.isSeeking) {
+      progress.value = canSeek ? audio.currentTime : 0;
+    }
+  }
+
+  function resetPlayerUI(player) {
+    if (!player) return;
+    setPlayerToListen(player);
+    if (player.progress) {
+      player.progress.value = 0;
+      player.progress.max = 0;
+      player.progress.disabled = true;
+    }
+  }
+
+  function cleanupCurrentPlayback(resetPlayer = true) {
     if (currentAudio) {
       if (currentAudio.__handleEnded) {
         currentAudio.removeEventListener("ended", currentAudio.__handleEnded);
@@ -260,8 +371,34 @@ const logger = Logger("[gemini-storybook-tts]");
         currentAudio.removeEventListener("error", currentAudio.__handleError);
         currentAudio.__handleError = null;
       }
+      if (currentAudio.__handleTimeUpdate) {
+        currentAudio.removeEventListener(
+          "timeupdate",
+          currentAudio.__handleTimeUpdate
+        );
+        currentAudio.__handleTimeUpdate = null;
+      }
+      if (currentAudio.__handleLoadedMeta) {
+        currentAudio.removeEventListener(
+          "loadedmetadata",
+          currentAudio.__handleLoadedMeta
+        );
+        currentAudio.__handleLoadedMeta = null;
+      }
+      if (currentAudio.__handleDurationChange) {
+        currentAudio.removeEventListener(
+          "durationchange",
+          currentAudio.__handleDurationChange
+        );
+        currentAudio.__handleDurationChange = null;
+      }
       currentAudio.pause();
       currentAudio = null;
+    }
+
+    if (currentPlayer?.streamAbort) {
+      currentPlayer.streamAbort();
+      currentPlayer.streamAbort = null;
     }
 
     if (currentAudioUrl) {
@@ -269,51 +406,126 @@ const logger = Logger("[gemini-storybook-tts]");
       currentAudioUrl = null;
     }
 
-    if (resetButton) {
-      if (currentButton) {
-        setButtonToListen(currentButton);
+    if (resetPlayer && currentPlayer) {
+      resetPlayerUI(currentPlayer);
+      if (currentPlayer.audioUrl) {
+        currentPlayer.audioUrl = null;
+        currentPlayer.audio = null;
       }
-      currentButton = null;
     }
+    currentPlayer = null;
   }
 
-  async function startPlayback(button, storyTextEl) {
-    const storyText = storyTextEl.textContent?.trim();
-    if (!storyText) {
-      logger.warn("No story text found to convert to speech.");
-      return;
-    }
+  function prepareCachedAudio(player, audioBlob) {
+    if (!audioBlob) return null;
+    if (player.audio && player.audioUrl) return player.audio;
+    const url = URL.createObjectURL(audioBlob);
+    player.audioUrl = url;
+    const audio = new Audio(url);
+    player.audio = audio;
+    attachAudioHandlers(player, audio);
+    return audio;
+  }
 
-    cleanupCurrentPlayback();
-    currentButton = button;
+  async function attachBlobToPlayer(player, audioBlob) {
+    const audio = prepareCachedAudio(player, audioBlob);
+    currentAudio = audio;
+    currentAudioUrl = player.audioUrl || null;
+    return audio;
+  }
 
-    const audioBlob = await requestTTS(storyText, {
-      onBeforeNetwork: () => {
-        setButtonToLoading(button);
-      },
+  function attachStreamToPlayer(player, stream, contentType, textForCache) {
+    const mediaSource = new MediaSource();
+    const objectUrl = URL.createObjectURL(mediaSource);
+    currentAudioUrl = objectUrl;
+
+    player.audioUrl = objectUrl;
+    const audio = new Audio(objectUrl);
+    player.audio = audio;
+    currentAudio = audio;
+
+    const chunks = [];
+    let totalLength = 0;
+
+    const appendBufferAsync = (sourceBuffer, chunk) =>
+      new Promise((resolve, reject) => {
+        const onUpdate = () => {
+          sourceBuffer.removeEventListener("updateend", onUpdate);
+          resolve();
+        };
+        const onError = () => {
+          sourceBuffer.removeEventListener("error", onError);
+          reject(new Error("SourceBuffer append failed"));
+        };
+        sourceBuffer.addEventListener("updateend", onUpdate, { once: true });
+        sourceBuffer.addEventListener("error", onError, { once: true });
+        sourceBuffer.appendBuffer(chunk);
+      });
+
+    mediaSource.addEventListener("sourceopen", async () => {
+      if (mediaSource.readyState !== "open") return;
+      const mimeType = contentType || "audio/mpeg";
+      let sourceBuffer;
+      try {
+        sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+      } catch (err) {
+        logger.error("Failed to create SourceBuffer", err);
+        mediaSource.endOfStream();
+        return;
+      }
+
+      const reader = stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          const chunk = value.buffer.slice(
+            value.byteOffset,
+            value.byteOffset + value.byteLength
+          );
+          chunks.push(value);
+          totalLength += value.byteLength;
+          await appendBufferAsync(sourceBuffer, chunk);
+        }
+        mediaSource.endOfStream();
+        if (totalLength > 0) {
+          const merged = new Uint8Array(totalLength);
+          let offset = 0;
+          chunks.forEach((chunk) => {
+            merged.set(chunk, offset);
+            offset += chunk.byteLength;
+          });
+          const blob = new Blob([merged], { type: mimeType });
+          cacheTTSItem(textForCache, blob);
+        }
+      } catch (err) {
+        logger.error("Streaming append failed", err);
+        try {
+          mediaSource.endOfStream();
+        } catch (closeErr) {
+          logger.warn("MediaSource end failed", closeErr);
+        }
+      }
     });
 
-    if (!audioBlob) {
-      setButtonToListen(button);
-      if (currentButton === button) {
-        currentButton = null;
-      }
-      return;
-    }
+    attachAudioHandlers(player, audio);
+    return audio;
+  }
 
-    const url = URL.createObjectURL(audioBlob);
-    const audio = new Audio(url);
-
-    currentAudio = audio;
-    currentAudioUrl = url;
-    currentButton = button;
-
+  function attachAudioHandlers(player, audio) {
     const handleEnded = () => {
       if (currentAudio !== audio) {
         audio.removeEventListener("ended", handleEnded);
         return;
       }
-      cleanupCurrentPlayback();
+      try {
+        audio.currentTime = 0;
+      } catch (err) {
+        logger.warn("Failed to reset playback position", err);
+      }
+      setPlayerToListen(player);
+      updateProgressUI(player);
     };
     const handleError = (err) => {
       if (currentAudio !== audio) {
@@ -323,15 +535,77 @@ const logger = Logger("[gemini-storybook-tts]");
       logger.error("Audio playback error", err);
       cleanupCurrentPlayback();
     };
+    const handleTimeUpdate = () => updateProgressUI(player);
+    const handleLoadedMeta = () => updateProgressUI(player);
+    const handleDurationChange = () => updateProgressUI(player);
 
     audio.__handleEnded = handleEnded;
     audio.__handleError = handleError;
+    audio.__handleTimeUpdate = handleTimeUpdate;
+    audio.__handleLoadedMeta = handleLoadedMeta;
+    audio.__handleDurationChange = handleDurationChange;
+
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("loadedmetadata", handleLoadedMeta);
+    audio.addEventListener("durationchange", handleDurationChange);
+  }
+
+  async function startPlayback(player, storyTextEl) {
+    const storyText = storyTextEl.textContent?.trim();
+    if (!storyText) {
+      logger.warn("No story text found to convert to speech.");
+      return;
+    }
+
+    cleanupCurrentPlayback();
+    currentPlayer = player;
+
+    let cachedBlob = player.cachedBlob;
+    if (!cachedBlob && player.cachePromise) {
+      try {
+        const cached = await player.cachePromise;
+        cachedBlob = cached?.audioBlob || null;
+        player.cachedBlob = cachedBlob;
+      } catch (err) {
+        logger.warn("Cache prefetch failed", err);
+      }
+    }
+
+    let audio = null;
+    if (cachedBlob) {
+      audio = await attachBlobToPlayer(player, cachedBlob);
+    } else {
+      const result = await requestTTSStream(storyText, {
+        onBeforeNetwork: () => {
+          setPlayerToLoading(player);
+        },
+      });
+      if (!result) {
+        setPlayerToListen(player);
+        if (currentPlayer === player) {
+          currentPlayer = null;
+        }
+        return;
+      }
+      if (result.type === "stream") {
+        player.streamAbort = result.abort;
+        audio = attachStreamToPlayer(
+          player,
+          result.stream,
+          result.contentType,
+          storyText
+        );
+      } else {
+        audio = await attachBlobToPlayer(player, result.blob);
+      }
+    }
 
     try {
       await audio.play();
-      setButtonToPause(button);
+      setPlayerToPause(player);
+      updateProgressUI(player);
     } catch (err) {
       logger.error("Audio playback failed", err);
       cleanupCurrentPlayback();
@@ -362,99 +636,240 @@ const logger = Logger("[gemini-storybook-tts]");
   }
 
   /**
-   * Creates or updates the button container above the story text.
+   * Creates or updates the audio player container above the story text.
    * - Copies the parent container of the `p.story-text` as the base style
-   * - Inserts a single button with an inline SVG icon and text "Listen"
+   * - Inserts a custom player with play/pause and progress bar
    * - Avoids duplicates by checking for existing marker class
    * @param {HTMLElement} storyTextEl
    */
+  function ensurePlayerStyles() {
+    const STYLE_ID = "userscript-tts-player-style";
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+      .userscript-tts-player-wrapper {
+        transition: box-shadow 0.2s ease;
+      }
+      .userscript-tts-player-wrapper:hover {
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.12);
+      }
+      .userscript-tts-play-button {
+        transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      }
+      .userscript-tts-play-button:hover {
+        filter: brightness(0.95);
+        box-shadow: 0 0 0 6px rgba(26, 115, 232, 0.18);
+      }
+      .userscript-tts-play-button:active {
+        transform: scale(0.97);
+      }
+      .userscript-tts-progress {
+        transition: filter 0.2s ease;
+      }
+      .userscript-tts-progress:hover {
+        filter: brightness(0.95);
+      }
+      .userscript-tts-progress::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #1A73E8;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.15);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+      .userscript-tts-progress:hover::-webkit-slider-thumb {
+        box-shadow: 0 0 0 6px rgba(26, 115, 232, 0.25);
+        transform: scale(1.05);
+      }
+      .userscript-tts-progress::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #1A73E8;
+        border: none;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.15);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+      .userscript-tts-progress:hover::-moz-range-thumb {
+        box-shadow: 0 0 0 6px rgba(26, 115, 232, 0.25);
+        transform: scale(1.05);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function ensureButtonAboveStory(storyTextEl) {
     const paragraphContainer = storyTextEl.parentElement;
     if (!paragraphContainer) return;
 
     // If we've already inserted for this particular story text container, bail
     const existing = paragraphContainer.previousElementSibling;
-    if (existing && existing.classList.contains(BUTTON_CONTAINER_CLASS)) {
+    if (existing && existing.classList.contains(PLAYER_CONTAINER_CLASS)) {
       return; // Already inserted for this page
     }
 
     // Clone the parent container to match spacing and width
-    const buttonContainer = paragraphContainer.cloneNode(false);
-    buttonContainer.classList.add(BUTTON_CONTAINER_CLASS);
+    const playerContainer = paragraphContainer.cloneNode(false);
+    playerContainer.classList.add(PLAYER_CONTAINER_CLASS);
 
     // Clean out any residual classes that may affect layout undesirably
-    buttonContainer.classList.remove("reached-end");
+    playerContainer.classList.remove("reached-end");
 
-    // Build the button
-    const button = document.createElement("button");
-    button.id = BUTTON_ID;
-    button.type = "button";
-    // Basic styles to resemble Gemini button
-    button.style.display = "inline-flex";
-    button.style.alignItems = "center";
-    button.style.gap = "8px";
-    button.style.padding = "8px 14px";
-    button.style.borderRadius = "10px";
-    button.style.border = "none";
-    button.style.background = "#0B57D0";
-    button.style.color = "#fff";
-    button.style.cursor = "pointer";
-    button.style.fontWeight = "600";
-    button.style.margin = "8px 0";
+    const player = {
+      container: playerContainer,
+      playButton: null,
+      playIcon: null,
+      progress: null,
+      audio: null,
+      audioUrl: null,
+      cachedBlob: null,
+      cachePromise: null,
+      streamAbort: null,
+      isSeeking: false,
+    };
 
-    const iconContainer = document.createElement("span"); // Wrapper for easy icon swapping
-    iconContainer.style.display = "flex"; // Fix alignment
-    iconContainer.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PLAY_ICON_SVG);
+    // Build the player UI
+    ensurePlayerStyles();
 
-    const label = document.createElement("span");
-    label.textContent = "Listen";
+    const wrapper = document.createElement("div");
+    wrapper.className = "userscript-tts-player-wrapper";
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.gap = "12px";
+    wrapper.style.padding = "8px 12px";
+    wrapper.style.borderRadius = "18px";
+    wrapper.style.background = "#F1F3F4";
+    wrapper.style.maxWidth = "50%";
+    wrapper.style.width = "100%";
+    wrapper.style.margin = "8px 0";
+    wrapper.style.boxSizing = "border-box";
 
-    button.__ttsIcon = iconContainer;
-    button.__ttsLabel = label;
+    const playButton = document.createElement("button");
+    playButton.className = "userscript-tts-play-button";
+    playButton.type = "button";
+    playButton.style.display = "inline-flex";
+    playButton.style.alignItems = "center";
+    playButton.style.justifyContent = "center";
+    playButton.style.width = "44px";
+    playButton.style.height = "44px";
+    playButton.style.borderRadius = "999px";
+    playButton.style.border = "none";
+    playButton.style.background = "#1A73E8";
+    playButton.style.color = "#fff";
+    playButton.style.cursor = "pointer";
+    playButton.style.flexShrink = "0";
 
-    button.appendChild(iconContainer);
-    button.appendChild(label);
-    setButtonToListen(button);
+    const playIcon = document.createElement("span");
+    playIcon.style.display = "flex";
+    playIcon.innerHTML = dangerouslyEscapeHTMLPolicy.createHTML(PLAY_ICON_SVG);
 
-    // Real TTS request
-    button.addEventListener("click", async (e) => {
+    playButton.appendChild(playIcon);
+
+    const progressWrapper = document.createElement("div");
+    progressWrapper.style.display = "flex";
+    progressWrapper.style.flex = "1 1 auto";
+    progressWrapper.style.alignItems = "center";
+    progressWrapper.style.gap = "10px";
+    progressWrapper.style.minWidth = "0";
+
+    const progress = document.createElement("input");
+    progress.className = "userscript-tts-progress";
+    progress.type = "range";
+    progress.min = "0";
+    progress.max = "0";
+    progress.value = "0";
+    progress.step = "0.1";
+    progress.disabled = true;
+    progress.style.flex = "1 1 auto";
+    progress.style.accentColor = "#1A73E8";
+    progress.style.height = "4px";
+    progress.style.cursor = "pointer";
+
+    progressWrapper.appendChild(progress);
+
+    wrapper.appendChild(playButton);
+    wrapper.appendChild(progressWrapper);
+    playerContainer.appendChild(wrapper);
+
+    player.playButton = playButton;
+    player.playIcon = playIcon;
+    player.progress = progress;
+    playerContainer.__ttsPlayer = player;
+    setPlayerToListen(player);
+
+    // Preload cache info without blocking playback
+    const storyText = storyTextEl.textContent?.trim();
+    if (storyText) {
+      player.cachePromise = getCachedTTSItem(storyText).then((cached) => {
+        if (cached?.audioBlob) {
+          player.cachedBlob = cached.audioBlob;
+          prepareCachedAudio(player, cached.audioBlob);
+          updateProgressUI(player);
+        }
+        return cached;
+      });
+    }
+
+    wrapper.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    playButton.addEventListener("click", async (e) => {
       e.stopPropagation();
 
-      if (button.dataset.ttsState === "loading") {
+      if (playButton.dataset.ttsState === "loading") {
         return;
       }
 
-      // If clicking the currently active button
-      if (currentButton === button && currentAudio) {
+      if (currentPlayer === player && currentAudio) {
         if (currentAudio.paused) {
           try {
             await currentAudio.play();
-            setButtonToPause(button);
+            setPlayerToPause(player);
           } catch (err) {
             logger.error("Resume failed", err);
-            setButtonToListen(button); // Revert on error
+            setPlayerToListen(player);
           }
         } else {
           currentAudio.pause();
-          setButtonToListen(button);
+          setPlayerToListen(player);
         }
         return;
       }
 
-      await startPlayback(button, storyTextEl);
+      await startPlayback(player, storyTextEl);
     });
 
-    buttonContainer.appendChild(button);
+    const seekStart = () => {
+      player.isSeeking = true;
+    };
+    const seekEnd = () => {
+      player.isSeeking = false;
+      if (player.audio && !progress.disabled) {
+        const target = Number(progress.value);
+        if (Number.isFinite(target)) {
+          player.audio.currentTime = target;
+        }
+      }
+    };
+    progress.addEventListener("mousedown", seekStart);
+    progress.addEventListener("touchstart", seekStart, { passive: true });
+    progress.addEventListener("mouseup", seekEnd);
+    progress.addEventListener("touchend", seekEnd);
+    progress.addEventListener("change", seekEnd);
 
     // Insert immediately above the story text parent
     paragraphContainer.parentElement?.insertBefore(
-      buttonContainer,
+      playerContainer,
       paragraphContainer
     );
-    logger("Inserted TTS button container above story text");
+    logger("Inserted TTS audio player above story text");
 
-    // Disable left-clicks within both containers; allow clicks on our button
-    blockLeftClicks(buttonContainer, button);
+    // Disable left-clicks within both containers; allow clicks on our player
+    blockLeftClicks(playerContainer, wrapper);
     blockLeftClicks(paragraphContainer, null);
   }
 
