@@ -64,10 +64,8 @@ const logger = Logger("[gemini-storybook-tts]");
     try {
       const item = await idbGet(text);
       if (item && item.audioBlob) {
-        logger("Cache hit for TTS audio");
         return item;
       }
-      logger("Cache miss for TTS audio");
       return null;
     } catch (err) {
       logger.warn("Cache get failed", err);
@@ -179,6 +177,7 @@ const logger = Logger("[gemini-storybook-tts]");
         });
       });
 
+      logger("TTS path: arraybuffer download");
       const blob = new Blob([buffer], {
         type: getContentTypeFromHeaders(headers),
       });
@@ -241,6 +240,7 @@ const logger = Logger("[gemini-storybook-tts]");
 
     const response = streamResponse?.res?.response;
     if (response && typeof response.getReader === "function") {
+      logger("TTS path: stream via ReadableStream");
       return {
         type: "stream",
         stream: response,
@@ -252,6 +252,7 @@ const logger = Logger("[gemini-storybook-tts]");
     }
 
     if (response instanceof ArrayBuffer) {
+      logger("TTS path: stream returned arraybuffer");
       const blob = new Blob([response], {
         type: getContentTypeFromHeaders(streamResponse.res.responseHeaders),
       });
@@ -264,6 +265,7 @@ const logger = Logger("[gemini-storybook-tts]");
       response.buffer instanceof ArrayBuffer &&
       Number.isFinite(response.byteLength)
     ) {
+      logger("TTS path: stream returned raw buffer");
       const blob = new Blob([response.buffer], {
         type: getContentTypeFromHeaders(streamResponse.res.responseHeaders),
       });
@@ -271,6 +273,7 @@ const logger = Logger("[gemini-storybook-tts]");
       return { type: "blob", blob };
     }
 
+    logger("TTS path: stream unavailable, falling back");
     const blob = await requestTTSArrayBuffer(text);
     if (!blob) return null;
     return { type: "blob", blob };
@@ -575,8 +578,10 @@ const logger = Logger("[gemini-storybook-tts]");
 
     let audio = null;
     if (cachedBlob) {
+      logger("Cache hit for TTS audio");
       audio = await attachBlobToPlayer(player, cachedBlob);
     } else {
+      logger("Cache miss for TTS audio");
       const result = await requestTTSStream(storyText, {
         onBeforeNetwork: () => {
           setPlayerToLoading(player);
@@ -901,4 +906,3 @@ const logger = Logger("[gemini-storybook-tts]");
     attributes: true,
   });
 })();
-
