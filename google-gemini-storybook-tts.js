@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.3.2
+// @version      0.4.0
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -133,7 +133,7 @@ const logger = Logger("[gemini-storybook-tts]");
     };
   }
 
-  async function requestTTSArrayBuffer(text, options = {}) {
+  async function requestTTS(text, options = {}) {
     const { onBeforeNetwork } = options;
     onBeforeNetwork?.();
 
@@ -177,7 +177,6 @@ const logger = Logger("[gemini-storybook-tts]");
         });
       });
 
-      logger("TTS path: arraybuffer download");
       const blob = new Blob([buffer], {
         type: getContentTypeFromHeaders(headers),
       });
@@ -187,96 +186,6 @@ const logger = Logger("[gemini-storybook-tts]");
       logger.error("TTS network error", err);
       return null;
     }
-  }
-
-  async function requestTTSStream(text, options = {}) {
-    const { onBeforeNetwork } = options;
-    onBeforeNetwork?.();
-
-    const apiKey = getElevenLabsApiKeyOrPrompt();
-    if (!apiKey) {
-      logger.warn("ElevenLabs API key missing. Aborting TTS request.");
-      return null;
-    }
-
-    const { endpoint, payload } = buildTTSRequestPayload(text);
-
-    let streamResponse = null;
-    try {
-      streamResponse = await new Promise((resolve, reject) => {
-        const request = GM_xmlhttpRequest({
-          method: "POST",
-          url: endpoint,
-          headers: {
-            "xi-api-key": apiKey,
-            "Content-Type": "application/json",
-          },
-          data: JSON.stringify(payload),
-          responseType: "stream",
-          timeout: 15000,
-          onload: (res) => {
-            if (res.status >= 200 && res.status < 300 && res.response) {
-              resolve({ res, abort: () => request.abort() });
-            } else {
-              reject(
-                new Error(
-                  `TTS request failed with status ${res.status}: ${res.responseText}`
-                )
-              );
-            }
-          },
-          onerror: (res) => {
-            reject(new Error(`TTS request error: ${res?.status || "unknown"}`));
-          },
-          ontimeout: () => {
-            reject(new Error("TTS request timed out"));
-          },
-        });
-      });
-    } catch (err) {
-      logger.warn("Streaming request unavailable, falling back", err);
-      streamResponse = null;
-    }
-
-    const response = streamResponse?.res?.response;
-    if (response && typeof response.getReader === "function") {
-      logger("TTS path: stream via ReadableStream");
-      return {
-        type: "stream",
-        stream: response,
-        contentType: getContentTypeFromHeaders(
-          streamResponse.res.responseHeaders
-        ),
-        abort: streamResponse.abort,
-      };
-    }
-
-    if (response instanceof ArrayBuffer) {
-      logger("TTS path: stream returned arraybuffer");
-      const blob = new Blob([response], {
-        type: getContentTypeFromHeaders(streamResponse.res.responseHeaders),
-      });
-      cacheTTSItem(text, blob);
-      return { type: "blob", blob };
-    }
-
-    if (
-      response &&
-      response.buffer instanceof ArrayBuffer &&
-      Number.isFinite(response.byteLength)
-    ) {
-      logger("TTS path: stream returned raw buffer");
-      const blob = new Blob([response.buffer], {
-        type: getContentTypeFromHeaders(streamResponse.res.responseHeaders),
-      });
-      cacheTTSItem(text, blob);
-      return { type: "blob", blob };
-    }
-
-    logger("TTS path: stream unavailable, falling back");
-    const blob = await requestTTSArrayBuffer(text);
-    if (!blob) return null;
-    return { type: "blob", blob };
   }
 
   /**
@@ -425,11 +334,6 @@ const logger = Logger("[gemini-storybook-tts]");
       currentAudio.pause();
     }
 
-    if (currentPlayer?.streamAbort) {
-      currentPlayer.streamAbort();
-      currentPlayer.streamAbort = null;
-    }
-
     if (disposeAudio && currentAudioUrl) {
       URL.revokeObjectURL(currentAudioUrl);
       currentAudioUrl = null;
@@ -460,89 +364,10 @@ const logger = Logger("[gemini-storybook-tts]");
     return audio;
   }
 
-  async function attachBlobToPlayer(player, audioBlob) {
+  function attachBlobToPlayer(player, audioBlob) {
     const audio = prepareCachedAudio(player, audioBlob);
     currentAudio = audio;
     currentAudioUrl = player.audioUrl || null;
-    return audio;
-  }
-
-  function attachStreamToPlayer(player, stream, contentType, textForCache) {
-    const mediaSource = new MediaSource();
-    const objectUrl = URL.createObjectURL(mediaSource);
-    currentAudioUrl = objectUrl;
-
-    player.audioUrl = objectUrl;
-    const audio = new Audio(objectUrl);
-    player.audio = audio;
-    currentAudio = audio;
-
-    const chunks = [];
-    let totalLength = 0;
-
-    const appendBufferAsync = (sourceBuffer, chunk) =>
-      new Promise((resolve, reject) => {
-        const onUpdate = () => {
-          sourceBuffer.removeEventListener("updateend", onUpdate);
-          resolve();
-        };
-        const onError = () => {
-          sourceBuffer.removeEventListener("error", onError);
-          reject(new Error("SourceBuffer append failed"));
-        };
-        sourceBuffer.addEventListener("updateend", onUpdate, { once: true });
-        sourceBuffer.addEventListener("error", onError, { once: true });
-        sourceBuffer.appendBuffer(chunk);
-      });
-
-    mediaSource.addEventListener("sourceopen", async () => {
-      if (mediaSource.readyState !== "open") return;
-      const mimeType = contentType || "audio/mpeg";
-      let sourceBuffer;
-      try {
-        sourceBuffer = mediaSource.addSourceBuffer(mimeType);
-      } catch (err) {
-        logger.error("Failed to create SourceBuffer", err);
-        mediaSource.endOfStream();
-        return;
-      }
-
-      const reader = stream.getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (!value) continue;
-          const chunk = value.buffer.slice(
-            value.byteOffset,
-            value.byteOffset + value.byteLength
-          );
-          chunks.push(value);
-          totalLength += value.byteLength;
-          await appendBufferAsync(sourceBuffer, chunk);
-        }
-        mediaSource.endOfStream();
-        if (totalLength > 0) {
-          const merged = new Uint8Array(totalLength);
-          let offset = 0;
-          chunks.forEach((chunk) => {
-            merged.set(chunk, offset);
-            offset += chunk.byteLength;
-          });
-          const blob = new Blob([merged], { type: mimeType });
-          cacheTTSItem(textForCache, blob);
-        }
-      } catch (err) {
-        logger.error("Streaming append failed", err);
-        try {
-          mediaSource.endOfStream();
-        } catch (closeErr) {
-          logger.warn("MediaSource end failed", closeErr);
-        }
-      }
-    });
-
-    attachAudioHandlers(player, audio);
     return audio;
   }
 
@@ -651,32 +476,22 @@ const logger = Logger("[gemini-storybook-tts]");
     let audio = null;
     if (cachedBlob) {
       logger("Cache hit for TTS audio");
-      audio = await attachBlobToPlayer(player, cachedBlob);
+      audio = attachBlobToPlayer(player, cachedBlob);
     } else {
       logger("Cache miss for TTS audio");
-      const result = await requestTTSStream(storyText, {
+      const audioBlob = await requestTTS(storyText, {
         onBeforeNetwork: () => {
           setPlayerToLoading(player);
         },
       });
-      if (!result) {
+      if (!audioBlob) {
         setPlayerToListen(player);
         if (currentPlayer === player) {
           currentPlayer = null;
         }
         return;
       }
-      if (result.type === "stream") {
-        player.streamAbort = result.abort;
-        audio = attachStreamToPlayer(
-          player,
-          result.stream,
-          result.contentType,
-          storyText
-        );
-      } else {
-        audio = await attachBlobToPlayer(player, result.blob);
-      }
+      audio = attachBlobToPlayer(player, audioBlob);
     }
 
     try {
@@ -811,7 +626,6 @@ const logger = Logger("[gemini-storybook-tts]");
       audioUrl: null,
       cachedBlob: null,
       cachePromise: null,
-      streamAbort: null,
       isSeeking: false,
       lastTime: 0,
       lastDuration: 0,
