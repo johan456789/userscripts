@@ -67,7 +67,7 @@ function createCache({ get, set, keys, del, logger, ttlMs, now }) {
   }
 
   function startEviction({ initialDelayMs = 1500, intervalMs = 0 } = {}) {
-    if (!ttlMs) return null;
+    if (!ttlMs) return () => {};
     if (evictionTimeoutId) clearTimeout(evictionTimeoutId);
     if (evictionIntervalId) clearInterval(evictionIntervalId);
     if (initialDelayMs >= 0) {
