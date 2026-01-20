@@ -13,6 +13,7 @@
 // @connect      api.elevenlabs.io
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/cache.js
 // @require      https://cdn.jsdelivr.net/npm/idb-keyval@6.2.2/dist/umd.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/google-gemini-storybook-tts.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/google-gemini-storybook-tts.js
@@ -59,28 +60,29 @@ const logger = Logger("[gemini-storybook-tts]");
   const idbGet = idb?.get?.bind(idb);
   const idbSet = idb?.set?.bind(idb);
 
+  const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+  const CACHE_EVICT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+  const cache = idb
+    ? createCache({
+        get: idbGet,
+        set: idbSet,
+        keys: idb?.keys?.bind(idb),
+        del: idb?.del?.bind(idb),
+        logger,
+        ttlMs: CACHE_TTL_MS,
+      })
+    : null;
+  if (!cache) {
+    logger.warn("idb-keyval unavailable; cache disabled");
+  }
+
   async function getCachedTTSItem(text) {
-    if (!idbGet) return null;
-    try {
-      const item = await idbGet(text);
-      if (item && item.audioBlob) {
-        return item;
-      }
-      return null;
-    } catch (err) {
-      logger.warn("Cache get failed", err);
-      return null;
-    }
+    return cache?.getItem(text) ?? null;
   }
 
   async function cacheTTSItem(text, audioBlob) {
-    if (!idbSet) return;
-    try {
-      const item = { audioBlob, creationDate: Date.now() };
-      await idbSet(text, item);
-    } catch (err) {
-      logger.warn("Cache set failed", err);
-    }
+    if (!cache) return;
+    await cache.setItem(text, audioBlob);
   }
 
   function getElevenLabsApiKeyOrPrompt() {
@@ -466,7 +468,7 @@ const logger = Logger("[gemini-storybook-tts]");
     if (!cachedBlob && player.cachePromise) {
       try {
         const cached = await player.cachePromise;
-        cachedBlob = cached?.audioBlob || null;
+        cachedBlob = cached?.value || null;
         player.cachedBlob = cachedBlob;
       } catch (err) {
         logger.warn("Cache prefetch failed", err);
@@ -707,9 +709,9 @@ const logger = Logger("[gemini-storybook-tts]");
     const storyText = storyTextEl.textContent?.trim();
     if (storyText) {
       player.cachePromise = getCachedTTSItem(storyText).then((cached) => {
-        if (cached?.audioBlob) {
-          player.cachedBlob = cached.audioBlob;
-          prepareCachedAudio(player, cached.audioBlob);
+        if (cached?.value) {
+          player.cachedBlob = cached.value;
+          prepareCachedAudio(player, cached.value);
           updateProgressUI(player);
         }
         return cached;
@@ -795,6 +797,12 @@ const logger = Logger("[gemini-storybook-tts]");
   }
 
   const debouncedRunOnce = debounce(runOnce, 200);
+
+  // Evict stale cache entries asynchronously on a schedule.
+  cache?.startEviction({
+    initialDelayMs: 1500, // 1.5 second later
+    intervalMs: CACHE_EVICT_INTERVAL_MS, // periodically evict stale cache entries
+  });
 
   // Initial run after DOM is ready
   runOnce();
