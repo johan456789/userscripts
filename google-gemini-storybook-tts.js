@@ -57,17 +57,16 @@ const logger = Logger("[gemini-storybook-tts]");
 
   // Simple IndexedDB cache via idb-keyval (loaded via @require)
   const idb = typeof idbKeyval !== "undefined" ? idbKeyval : null;
-  const idbGet = idb?.get?.bind(idb);
-  const idbSet = idb?.set?.bind(idb);
+  const idbStore = idb?.createStore?.("gemini-storybook-tts", "tts-cache");
 
   const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
   const CACHE_EVICT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-  const cache = idb
+  const cache = idbStore
     ? createCache({
-        get: idbGet,
-        set: idbSet,
-        keys: idb?.keys?.bind(idb),
-        del: idb?.del?.bind(idb),
+        get: (key) => idb.get(key, idbStore),
+        set: (key, value) => idb.set(key, value, idbStore),
+        keys: () => idb.keys(idbStore),
+        del: (key) => idb.del(key, idbStore),
         logger,
         ttlMs: CACHE_TTL_MS,
       })
