@@ -799,12 +799,10 @@ const logger = Logger("[gemini-storybook-tts]");
   const debouncedRunOnce = debounce(runOnce, 200);
 
   // Evict stale cache entries asynchronously on a schedule.
-  setTimeout(() => {
-    void cache?.evictOld();
-  }, 1500); // 1.5 second later
-  setInterval(() => {
-    void cache?.evictOld();
-  }, CACHE_EVICT_INTERVAL_MS); // periodically evict stale cache entries
+  cache?.startEviction({
+    initialDelayMs: 1500, // 1.5 second later
+    intervalMs: CACHE_EVICT_INTERVAL_MS, // periodically evict stale cache entries
+  });
 
   // Initial run after DOM is ready
   runOnce();

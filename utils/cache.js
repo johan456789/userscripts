@@ -3,16 +3,26 @@
  * Expects storage adapter methods: get, set, keys, del.
  */
 function createCache({ get, set, keys, del, logger, ttlMs, now }) {
-  const nowFn = typeof now === "function" ? now : Date.now; // this allows for mocking the time function
+  const nowFn = typeof now === "function" ? now : Date.now;
   let evictionInFlight = false;
+  let evictionTimeoutId = null;
+  let evictionIntervalId = null;
 
   async function getItem(key) {
     if (!get) return null;
     try {
       const item = await get(key);
-      return item && Object.prototype.hasOwnProperty.call(item, "value")
-        ? item
-        : null;
+      if (!item || !Object.prototype.hasOwnProperty.call(item, "value")) {
+        return null;
+      }
+      if (ttlMs && del && item.creationDate) {
+        const cutoff = nowFn() - ttlMs;
+        if (item.creationDate < cutoff) {
+          await del(key);
+          return null;
+        }
+      }
+      return item;
     } catch (err) {
       logger?.warn?.("Cache get failed", err);
       return null;
@@ -56,5 +66,27 @@ function createCache({ get, set, keys, del, logger, ttlMs, now }) {
     }
   }
 
-  return { getItem, setItem, evictOld };
+  function startEviction({ initialDelayMs = 1500, intervalMs = 0 } = {}) {
+    if (!ttlMs) return null;
+    if (evictionTimeoutId) clearTimeout(evictionTimeoutId);
+    if (evictionIntervalId) clearInterval(evictionIntervalId);
+    if (initialDelayMs >= 0) {
+      evictionTimeoutId = setTimeout(() => {
+        void evictOld();
+      }, initialDelayMs);
+    }
+    if (intervalMs > 0) {
+      evictionIntervalId = setInterval(() => {
+        void evictOld();
+      }, intervalMs);
+    }
+    return () => {
+      if (evictionTimeoutId) clearTimeout(evictionTimeoutId);
+      if (evictionIntervalId) clearInterval(evictionIntervalId);
+      evictionTimeoutId = null;
+      evictionIntervalId = null;
+    };
+  }
+
+  return { getItem, setItem, evictOld, startEviction };
 }
