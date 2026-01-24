@@ -2,7 +2,7 @@
 // @name                    Jump to DeepWiki from Github
 // @name:zh-CN              Github 跳转至 DeepWiki
 // @namespace               http://tampermonkey.net/
-// @version                 0.2.0
+// @version                 0.2.1
 // @description             Add an anchor to jump to DeepWiki from Github
 // @description:zh-CN       在 Github 页面添加一个链接，跳转至 DeepWiki
 // @match                   *://github.com/*
@@ -79,7 +79,8 @@ function CreateUI() {
     svg.appendChild(path3);
 
     anchor.appendChild(svg);
-    anchor.appendChild(document.createTextNode(' DeepWiki')); // must have a space to make it aligned. github is weird.
+    // anchor.appendChild(document.createTextNode(' DeepWiki')); // must have a space to make it aligned. github is weird.
+    anchor.appendChild(document.createTextNode('DeepWiki')); // with refined github extension enabled, it's aligned.
 
     const h3 = document.createElement('h3');
     h3.className = 'sr-only';
