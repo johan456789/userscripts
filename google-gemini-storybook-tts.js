@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.4.1
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -115,7 +115,7 @@ const logger = Logger("[gemini-storybook-tts]");
   }
 
   function buildTTSRequestPayload(text) {
-    const voiceId = "g10k86KeEUyBqW9lcKYg";
+    const voiceId = "JBFqnCBsd6RMkjVDRZzb";
     const outputFormat = "mp3_44100_128";
     const modelId = "eleven_flash_v2_5"; // or eleven_multilingual_v2
     const languageCode = "es";
