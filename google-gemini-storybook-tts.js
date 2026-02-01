@@ -28,6 +28,7 @@ const logger = Logger("[gemini-storybook-tts]");
 
   // Unique id/class markers to avoid duplicate insertions
   const PLAYER_CONTAINER_CLASS = "userscript-tts-player-container";
+  const TTS_WORD_CLASS = "tts-word";
 
   // Global state for audio playback
   let currentAudio = null;
@@ -308,6 +309,65 @@ const logger = Logger("[gemini-storybook-tts]");
     };
     container.addEventListener("click", handler, true);
     container.dataset.clickBlocked = "1";
+  }
+
+  /**
+   * Wraps each word in the given element with a span for TTS highlighting.
+   * Uses Intl.Segmenter for accurate word segmentation (with regex fallback).
+   * Preserves non-word characters (spaces, punctuation) as text nodes.
+   * @param {HTMLElement} el - The element containing text to wrap
+   * @param {string} [lang="es"] - Language code for segmentation
+   * @returns {number} - Number of words wrapped
+   */
+  function wrapWordsInSpans(el, lang = "es") {
+    if (!el) {
+      logger.warn("wrapWordsInSpans: Target element not found.");
+      return 0;
+    }
+
+    // Avoid double-processing
+    if (el.dataset.wordWrapped === "1") {
+      logger("wrapWordsInSpans: Already processed.");
+      return el.querySelectorAll("span." + TTS_WORD_CLASS).length;
+    }
+
+    const text = el.textContent ?? "";
+    const frag = document.createDocumentFragment();
+
+    if ("Segmenter" in Intl) {
+      const seg = new Intl.Segmenter(lang, { granularity: "word" });
+      for (const part of seg.segment(text)) {
+        if (part.isWordLike) {
+          const span = document.createElement("span");
+          span.className = TTS_WORD_CLASS;
+          span.textContent = part.segment;
+          frag.appendChild(span);
+        } else {
+          frag.appendChild(document.createTextNode(part.segment));
+        }
+      }
+    } else {
+      // Fallback: words vs non-words (including punctuation/space)
+      const tokens = text.match(/\p{L}+\p{M}*|\p{N}+|[^\p{L}\p{N}]+/gu) || [];
+      for (const tok of tokens) {
+        if (/^\p{L}|\p{N}/u.test(tok)) {
+          const span = document.createElement("span");
+          span.className = TTS_WORD_CLASS;
+          span.textContent = tok;
+          frag.appendChild(span);
+        } else {
+          frag.appendChild(document.createTextNode(tok));
+        }
+      }
+    }
+
+    el.textContent = "";
+    el.appendChild(frag);
+    el.dataset.wordWrapped = "1";
+
+    const wordCount = el.querySelectorAll("span." + TTS_WORD_CLASS).length;
+    logger("Wrapped words:", wordCount);
+    return wordCount;
   }
 
   function setPlayerState(player, state) {
@@ -702,6 +762,9 @@ const logger = Logger("[gemini-storybook-tts]");
   function ensureButtonAboveStory(storyTextEl) {
     const paragraphContainer = storyTextEl.parentElement;
     if (!paragraphContainer) return;
+
+    // Preprocess story text: wrap words in spans for TTS highlighting
+    wrapWordsInSpans(storyTextEl);
 
     // If we've already inserted for this particular story text container, bail
     const existing = paragraphContainer.previousElementSibling;
