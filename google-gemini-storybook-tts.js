@@ -29,6 +29,7 @@ const logger = Logger("[gemini-storybook-tts]");
   // Unique id/class markers to avoid duplicate insertions
   const PLAYER_CONTAINER_CLASS = "userscript-tts-player-container";
   const TTS_WORD_CLASS = "tts-word";
+  const TTS_WORD_PLAYING_CLASS = "playing";
 
   // Global state for audio playback
   let currentAudio = null;
@@ -341,6 +342,8 @@ const logger = Logger("[gemini-storybook-tts]");
           const span = document.createElement("span");
           span.className = TTS_WORD_CLASS;
           span.textContent = part.segment;
+          span.dataset.start = String(part.index);
+          span.dataset.end = String(part.index + part.segment.length);
           frag.appendChild(span);
         } else {
           frag.appendChild(document.createTextNode(part.segment));
@@ -348,12 +351,17 @@ const logger = Logger("[gemini-storybook-tts]");
       }
     } else {
       // Fallback: words vs non-words (including punctuation/space)
-      const tokens = text.match(/\p{L}+\p{M}*|\p{N}+|[^\p{L}\p{N}]+/gu) || [];
-      for (const tok of tokens) {
+      const tokenRe = /(\p{L}+\p{M}*|\p{N}+|[^\p{L}\p{N}]+)/gu;
+      for (const match of text.matchAll(tokenRe)) {
+        const tok = match[0];
+        const start = match.index ?? 0;
+        const end = start + tok.length;
         if (/^\p{L}|\p{N}/u.test(tok)) {
           const span = document.createElement("span");
           span.className = TTS_WORD_CLASS;
           span.textContent = tok;
+          span.dataset.start = String(start);
+          span.dataset.end = String(end);
           frag.appendChild(span);
         } else {
           frag.appendChild(document.createTextNode(tok));
@@ -368,6 +376,112 @@ const logger = Logger("[gemini-storybook-tts]");
     const wordCount = el.querySelectorAll("span." + TTS_WORD_CLASS).length;
     logger("Wrapped words:", wordCount);
     return wordCount;
+  }
+
+  function upperBound(arr, x) {
+    // first index i where arr[i] > x
+    let lo = 0;
+    let hi = arr.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (arr[mid] <= x) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  function buildWordTimingsFromAlignment(storyTextEl, alignment) {
+    if (!storyTextEl || !alignment) return null;
+    const chars = alignment.characters;
+    const starts = alignment.character_start_times_seconds;
+    const ends = alignment.character_end_times_seconds;
+    if (!Array.isArray(chars) || !Array.isArray(starts) || !Array.isArray(ends)) {
+      logger.warn("Alignment data missing expected arrays.");
+      return null;
+    }
+    if (chars.length !== starts.length || chars.length !== ends.length) {
+      logger.warn("Alignment arrays length mismatch.", {
+        chars: chars.length,
+        starts: starts.length,
+        ends: ends.length,
+      });
+      return null;
+    }
+
+    const text = storyTextEl.textContent ?? "";
+    if (text.length !== chars.length) {
+      logger.warn("Alignment length does not match text length.", {
+        textLength: text.length,
+        alignmentLength: chars.length,
+      });
+      return null;
+    }
+
+    const spans = Array.from(
+      storyTextEl.querySelectorAll("span." + TTS_WORD_CLASS)
+    );
+    if (spans.length === 0) return null;
+
+    const wordStarts = [];
+    const wordEnds = [];
+
+    for (const span of spans) {
+      const startIdx = Number(span.dataset.start);
+      const endIdx = Number(span.dataset.end);
+      if (!Number.isFinite(startIdx) || !Number.isFinite(endIdx) || endIdx <= startIdx) {
+        logger.warn("Invalid word span offsets.", span.textContent);
+        return null;
+      }
+      const startTime = starts[startIdx];
+      const endTime = ends[endIdx - 1];
+      if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) {
+        logger.warn("Invalid alignment timing for span.", span.textContent);
+        return null;
+      }
+      wordStarts.push(startTime);
+      wordEnds.push(endTime);
+    }
+
+    return {
+      spans,
+      starts: wordStarts,
+      ends: wordEnds,
+      currentIdx: -1,
+    };
+  }
+
+  function highlightAt(player, timeNow) {
+    const data = player?.wordData;
+    if (!data || !Number.isFinite(timeNow)) return;
+    const { spans, starts, ends } = data;
+    if (!spans?.length) return;
+
+    let idx = upperBound(starts, timeNow) - 1;
+    if (idx < 0 || idx >= spans.length || timeNow > ends[idx]) {
+      idx = -1;
+    }
+
+    if (idx !== data.currentIdx) {
+      if (data.currentIdx >= 0) {
+        spans[data.currentIdx].classList.remove(TTS_WORD_PLAYING_CLASS);
+      }
+      if (idx >= 0) {
+        spans[idx].classList.add(TTS_WORD_PLAYING_CLASS);
+      }
+      data.currentIdx = idx;
+    }
+  }
+
+  function ensureWordData(player, storyTextEl, alignment) {
+    if (!player || !storyTextEl || !alignment) return;
+    const textKey = storyTextEl.textContent ?? "";
+    if (player.wordData && player.wordDataKey === textKey) return;
+    const wordData = buildWordTimingsFromAlignment(storyTextEl, alignment);
+    if (!wordData) return;
+    player.wordData = wordData;
+    player.wordDataKey = textKey;
+    const initialTime = Number.isFinite(player.lastTime) ? player.lastTime : 0;
+    highlightAt(player, initialTime);
   }
 
   function setPlayerState(player, state) {
@@ -430,6 +544,7 @@ const logger = Logger("[gemini-storybook-tts]");
         ? player.lastTime
         : 0;
     }
+    highlightAt(player, currentTime);
   }
 
   function resetPlayerUI(player) {
@@ -612,7 +727,7 @@ const logger = Logger("[gemini-storybook-tts]");
   }
 
   async function startPlayback(player, storyTextEl) {
-    const storyText = storyTextEl.textContent?.trim();
+    const storyText = storyTextEl.textContent ?? "";
     if (!storyText) {
       logger.warn("No story text found to convert to speech.");
       return;
@@ -630,6 +745,9 @@ const logger = Logger("[gemini-storybook-tts]");
         } catch (err) {
           logger.warn("Failed to restore playback position", err);
         }
+      }
+      if (player.cachedEntry?.alignment) {
+        ensureWordData(player, storyTextEl, player.cachedEntry.alignment);
       }
       try {
         await currentAudio.play();
@@ -658,6 +776,9 @@ const logger = Logger("[gemini-storybook-tts]");
     if (cachedEntry?.audioBlob) {
       logger("Cache hit for TTS audio");
       audio = attachBlobToPlayer(player, cachedEntry.audioBlob);
+      if (cachedEntry.alignment) {
+        ensureWordData(player, storyTextEl, cachedEntry.alignment);
+      }
     } else {
       logger("Cache miss for TTS audio");
       const result = await requestTTS(storyText, {
@@ -675,6 +796,9 @@ const logger = Logger("[gemini-storybook-tts]");
       // Store the structured entry for future use
       player.cachedEntry = result;
       audio = attachBlobToPlayer(player, result.audioBlob);
+      if (result.alignment) {
+        ensureWordData(player, storyTextEl, result.alignment);
+      }
     }
 
     try {
@@ -779,6 +903,14 @@ const logger = Logger("[gemini-storybook-tts]");
         box-shadow: 0 0 0 6px rgba(26, 115, 232, 0.25);
         transform: scale(1.05);
       }
+      .${TTS_WORD_CLASS} {
+        padding: 0 0.12em;
+        border-radius: 0.25em;
+        transition: background 70ms linear;
+      }
+      .${TTS_WORD_CLASS}.${TTS_WORD_PLAYING_CLASS} {
+        background: rgba(255, 230, 0, 0.65);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -815,6 +947,8 @@ const logger = Logger("[gemini-storybook-tts]");
       isSeeking: false,
       lastTime: 0,
       lastDuration: 0,
+      wordData: null,
+      wordDataKey: "",
     };
 
     // Build the player UI
@@ -890,12 +1024,15 @@ const logger = Logger("[gemini-storybook-tts]");
     setPlayerToListen(player);
 
     // Preload cache info without blocking playback
-    const storyText = storyTextEl.textContent?.trim();
+    const storyText = storyTextEl.textContent ?? "";
     if (storyText) {
       player.cachePromise = getCachedTTSItem(storyText).then((cached) => {
         if (cached?.value?.audioBlob) {
           player.cachedEntry = cached.value;
           prepareCachedAudio(player, cached.value.audioBlob);
+          if (cached.value.alignment) {
+            ensureWordData(player, storyTextEl, cached.value.alignment);
+          }
           updateProgressUI(player);
         }
         return cached;
@@ -916,6 +1053,9 @@ const logger = Logger("[gemini-storybook-tts]");
       if (currentPlayer === player && currentAudio) {
         if (currentAudio.paused) {
           try {
+            if (player.cachedEntry?.alignment) {
+              ensureWordData(player, storyTextEl, player.cachedEntry.alignment);
+            }
             await currentAudio.play();
             setPlayerToPause(player);
           } catch (err) {
@@ -949,8 +1089,17 @@ const logger = Logger("[gemini-storybook-tts]");
         }
       }
     };
+    const seekMove = () => {
+      if (!progress.disabled) {
+        const target = Number(progress.value);
+        if (Number.isFinite(target)) {
+          highlightAt(player, target);
+        }
+      }
+    };
     progress.addEventListener("mousedown", seekStart);
     progress.addEventListener("touchstart", seekStart, { passive: true });
+    progress.addEventListener("input", seekMove);
     progress.addEventListener("mouseup", seekEnd);
     progress.addEventListener("touchend", seekEnd);
     progress.addEventListener("change", seekEnd);
