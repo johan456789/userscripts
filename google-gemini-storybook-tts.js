@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.5.1
+// @version      0.5.2
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -839,6 +839,15 @@ const UI = (() => {
       }
       .userscript-tts-play-button:active {
         transform: scale(0.97);
+      }
+      .userscript-tts-play-button[data-tts-state="loading"] svg {
+        transform-origin: 50% 50%;
+        animation: userscript-tts-spin 0.5s linear infinite;
+      }
+      @keyframes userscript-tts-spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
       .userscript-tts-progress {
         transition: filter 0.2s ease;
