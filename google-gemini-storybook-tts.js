@@ -456,6 +456,7 @@ const logger = Logger("[gemini-storybook-tts]");
     }
 
     if (currentAudio) {
+      stopProgressRaf(currentAudio);
       if (disposeAudio) {
         if (currentAudio.__handleEnded) {
           currentAudio.removeEventListener("ended", currentAudio.__handleEnded);
@@ -465,12 +466,17 @@ const logger = Logger("[gemini-storybook-tts]");
           currentAudio.removeEventListener("error", currentAudio.__handleError);
           currentAudio.__handleError = null;
         }
-        if (currentAudio.__handleTimeUpdate) {
-          currentAudio.removeEventListener(
-            "timeupdate",
-            currentAudio.__handleTimeUpdate
-          );
-          currentAudio.__handleTimeUpdate = null;
+        if (currentAudio.__handlePlay) {
+          currentAudio.removeEventListener("play", currentAudio.__handlePlay);
+          currentAudio.__handlePlay = null;
+        }
+        if (currentAudio.__handlePause) {
+          currentAudio.removeEventListener("pause", currentAudio.__handlePause);
+          currentAudio.__handlePause = null;
+        }
+        if (currentAudio.__handleSeeked) {
+          currentAudio.removeEventListener("seeked", currentAudio.__handleSeeked);
+          currentAudio.__handleSeeked = null;
         }
         if (currentAudio.__handleLoadedMeta) {
           currentAudio.removeEventListener(
@@ -478,13 +484,6 @@ const logger = Logger("[gemini-storybook-tts]");
             currentAudio.__handleLoadedMeta
           );
           currentAudio.__handleLoadedMeta = null;
-        }
-        if (currentAudio.__handleDurationChange) {
-          currentAudio.removeEventListener(
-            "durationchange",
-            currentAudio.__handleDurationChange
-          );
-          currentAudio.__handleDurationChange = null;
         }
       }
       currentAudio.pause();
@@ -554,6 +553,7 @@ const logger = Logger("[gemini-storybook-tts]");
         audio.removeEventListener("ended", handleEnded);
         return;
       }
+      stopProgressRaf(audio);
       try {
         audio.currentTime = 0;
       } catch (err) {
@@ -567,24 +567,48 @@ const logger = Logger("[gemini-storybook-tts]");
         audio.removeEventListener("error", handleError);
         return;
       }
+      stopProgressRaf(audio);
       logger.error("Audio playback error", err);
       cleanupCurrentPlayback();
     };
-    const handleTimeUpdate = () => updateProgressUI(player);
+    const handlePlay = () => startProgressRaf(player, audio);
+    const handlePause = () => stopProgressRaf(audio);
+    const handleSeeked = () => updateProgressUI(player);
     const handleLoadedMeta = () => updateProgressUI(player);
-    const handleDurationChange = () => updateProgressUI(player);
 
     audio.__handleEnded = handleEnded;
     audio.__handleError = handleError;
-    audio.__handleTimeUpdate = handleTimeUpdate;
+    audio.__handlePlay = handlePlay;
+    audio.__handlePause = handlePause;
+    audio.__handleSeeked = handleSeeked;
     audio.__handleLoadedMeta = handleLoadedMeta;
-    audio.__handleDurationChange = handleDurationChange;
 
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError);
-    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("seeked", handleSeeked);
     audio.addEventListener("loadedmetadata", handleLoadedMeta);
-    audio.addEventListener("durationchange", handleDurationChange);
+  }
+
+  function startProgressRaf(player, audio) {
+    if (!audio || !player) return;
+    if (audio.__progressRafId != null) {
+      cancelAnimationFrame(audio.__progressRafId);
+      audio.__progressRafId = null;
+    }
+    const tick = () => {
+      if (currentAudio !== audio) return;
+      updateProgressUI(player);
+      audio.__progressRafId = requestAnimationFrame(tick);
+    };
+    audio.__progressRafId = requestAnimationFrame(tick);
+  }
+
+  function stopProgressRaf(audio) {
+    if (!audio || audio.__progressRafId == null) return;
+    cancelAnimationFrame(audio.__progressRafId);
+    audio.__progressRafId = null;
   }
 
   async function startPlayback(player, storyTextEl) {
@@ -844,7 +868,7 @@ const logger = Logger("[gemini-storybook-tts]");
     progress.min = "0";
     progress.max = "0";
     progress.value = "0";
-    progress.step = "0.1";
+    progress.step = "any";  // no quantization for smooth playhead updates
     progress.disabled = true;
     progress.style.flex = "1 1 auto";
     progress.style.width = "100%";
