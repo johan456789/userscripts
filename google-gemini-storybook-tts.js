@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.4.1
+// @version      0.5.0
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -75,13 +75,58 @@ const logger = Logger("[gemini-storybook-tts]");
     logger.warn("idb-keyval unavailable; cache disabled");
   }
 
-  async function getCachedTTSItem(text) {
-    return cache?.getItem(text) ?? null;
+  // Cache key versioning - increment when cache schema changes
+  const CACHE_VERSION = "v2";
+
+  /**
+   * Compute a SHA-256 hash for a string using Web Crypto.
+   * @param {string} str
+   * @returns {Promise<string>}
+   */
+  async function hashString(str) {
+    const data = new TextEncoder().encode(str);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
   }
 
-  async function cacheTTSItem(text, audioBlob) {
+  /**
+   * Build a cache key based on text only.
+   * Format: tts:v2:{textHash}
+   * @param {string} text
+   * @returns {Promise<string>}
+   */
+  async function buildCacheKey(text) {
+    const textHash = await hashString(text);
+    return `tts:${CACHE_VERSION}:${textHash}`;
+  }
+
+  /**
+   * Get a cached TTS entry by text.
+   * @param {string} text
+   * @returns {Promise<{value: {audioBlob: Blob, contentType: string, endpointType: string, alignment: Object|null, normalizedAlignment: Object|null}, creationDate: number}|null>}
+   */
+  async function getCachedTTSItem(text) {
+    if (!cache) return null;
+    const cacheKey = await buildCacheKey(text);
+    return cache.getItem(cacheKey);
+  }
+
+  /**
+   * Cache a TTS entry with structured data.
+   * @param {string} text
+   * @param {Object} entry
+   * @param {Blob} entry.audioBlob
+   * @param {string} entry.contentType
+   * @param {string} entry.endpointType
+   * @param {Object|null} entry.alignment
+   * @param {Object|null} entry.normalizedAlignment
+   */
+  async function cacheTTSItem(text, entry) {
     if (!cache) return;
-    await cache.setItem(text, audioBlob);
+    const cacheKey = await buildCacheKey(text);
+    await cache.setItem(cacheKey, entry);
   }
 
   function getElevenLabsApiKeyOrPrompt() {
@@ -109,31 +154,57 @@ const logger = Logger("[gemini-storybook-tts]");
     return elevenLabsApiKey;
   }
 
-  function getContentTypeFromHeaders(headers) {
-    const contentTypeMatch = /content-type:\s*([^\n]+)/i.exec(headers || "");
-    return contentTypeMatch?.[1]?.trim() || "audio/mpeg";
-  }
+  const CURRENT_ENDPOINT_TYPE = "tts_with_timestamps";
 
   function buildTTSRequestPayload(text) {
     const voiceId = "JBFqnCBsd6RMkjVDRZzb";
     const outputFormat = "mp3_44100_128";
     const modelId = "eleven_flash_v2_5"; // or eleven_multilingual_v2
     const languageCode = "es";
+    const endpointType = CURRENT_ENDPOINT_TYPE;
     const voiceSettings = {
       speed: 0.8,
     };
 
     return {
-      endpoint: `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=${outputFormat}`,
+      // Use with-timestamps endpoint for alignment data
+      endpoint: `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`,
       payload: {
         text: text,
         model_id: modelId,
         language_code: languageCode,
+        output_format: outputFormat,
         voice_settings: voiceSettings,
+      },
+      cacheParams: {
+        endpointType,
       },
     };
   }
 
+  /**
+   * Decode a base64 string to a Blob.
+   * @param {string} base64
+   * @param {string} contentType
+   * @returns {Blob}
+   */
+  function base64ToBlob(base64, contentType = "audio/mpeg") {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: contentType });
+  }
+
+  /**
+   * Request TTS from ElevenLabs with timestamps endpoint.
+   * Returns a structured entry with audio blob and alignment data.
+   * @param {string} text
+   * @param {Object} options
+   * @param {Function} options.onBeforeNetwork
+   * @returns {Promise<{audioBlob: Blob, contentType: string, endpointType: string, alignment: Object|null, normalizedAlignment: Object|null}|null>}
+   */
   async function requestTTS(text, options = {}) {
     const { onBeforeNetwork } = options;
     onBeforeNetwork?.();
@@ -144,10 +215,10 @@ const logger = Logger("[gemini-storybook-tts]");
       return null;
     }
 
-    const { endpoint, payload } = buildTTSRequestPayload(text);
+    const { endpoint, payload, cacheParams } = buildTTSRequestPayload(text);
 
     try {
-      const { buffer, headers } = await new Promise((resolve, reject) => {
+      const responseText = await new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
           method: "POST",
           url: endpoint,
@@ -156,11 +227,11 @@ const logger = Logger("[gemini-storybook-tts]");
             "Content-Type": "application/json",
           },
           data: JSON.stringify(payload),
-          responseType: "arraybuffer",
+          responseType: "text",
           timeout: 15000,
           onload: (res) => {
-            if (res.status >= 200 && res.status < 300 && res.response) {
-              resolve({ buffer: res.response, headers: res.responseHeaders });
+            if (res.status >= 200 && res.status < 300 && res.responseText) {
+              resolve(res.responseText);
             } else {
               reject(
                 new Error(
@@ -178,11 +249,35 @@ const logger = Logger("[gemini-storybook-tts]");
         });
       });
 
-      const blob = new Blob([buffer], {
-        type: getContentTypeFromHeaders(headers),
-      });
-      cacheTTSItem(text, blob);
-      return blob;
+      // Parse JSON response from with-timestamps endpoint
+      const data = JSON.parse(responseText);
+      const { audio_base64, alignment, normalized_alignment } = data;
+
+      if (!audio_base64) {
+        throw new Error("No audio data in response");
+      }
+
+      // Determine content type from output format
+      const contentType = payload.output_format.startsWith("mp3")
+        ? "audio/mpeg"
+        : payload.output_format.startsWith("pcm")
+        ? "audio/pcm"
+        : "audio/mpeg";
+
+      const audioBlob = base64ToBlob(audio_base64, contentType);
+
+      const entry = {
+        audioBlob,
+        contentType,
+        endpointType: cacheParams.endpointType,
+        alignment: alignment || null,
+        normalizedAlignment: normalized_alignment || null,
+      };
+
+      // Cache the structured entry
+      await cacheTTSItem(text, entry);
+
+      return entry;
     } catch (err) {
       logger.error("TTS network error", err);
       return null;
@@ -463,36 +558,39 @@ const logger = Logger("[gemini-storybook-tts]");
       return;
     }
 
-    let cachedBlob = player.cachedBlob;
-    if (!cachedBlob && player.cachePromise) {
+    // Try to get cached entry (structured with audioBlob + alignment)
+    let cachedEntry = player.cachedEntry;
+    if (!cachedEntry && player.cachePromise) {
       try {
         const cached = await player.cachePromise;
-        cachedBlob = cached?.value || null;
-        player.cachedBlob = cachedBlob;
+        cachedEntry = cached?.value || null;
+        player.cachedEntry = cachedEntry;
       } catch (err) {
         logger.warn("Cache prefetch failed", err);
       }
     }
 
     let audio = null;
-    if (cachedBlob) {
+    if (cachedEntry?.audioBlob) {
       logger("Cache hit for TTS audio");
-      audio = attachBlobToPlayer(player, cachedBlob);
+      audio = attachBlobToPlayer(player, cachedEntry.audioBlob);
     } else {
       logger("Cache miss for TTS audio");
-      const audioBlob = await requestTTS(storyText, {
+      const result = await requestTTS(storyText, {
         onBeforeNetwork: () => {
           setPlayerToLoading(player);
         },
       });
-      if (!audioBlob) {
+      if (!result?.audioBlob) {
         setPlayerToListen(player);
         if (currentPlayer === player) {
           currentPlayer = null;
         }
         return;
       }
-      audio = attachBlobToPlayer(player, audioBlob);
+      // Store the structured entry for future use
+      player.cachedEntry = result;
+      audio = attachBlobToPlayer(player, result.audioBlob);
     }
 
     try {
@@ -625,7 +723,7 @@ const logger = Logger("[gemini-storybook-tts]");
       progress: null,
       audio: null,
       audioUrl: null,
-      cachedBlob: null,
+      cachedEntry: null, // Structured entry: { audioBlob, contentType, endpointType, alignment, normalizedAlignment }
       cachePromise: null,
       isSeeking: false,
       lastTime: 0,
@@ -708,9 +806,9 @@ const logger = Logger("[gemini-storybook-tts]");
     const storyText = storyTextEl.textContent?.trim();
     if (storyText) {
       player.cachePromise = getCachedTTSItem(storyText).then((cached) => {
-        if (cached?.value) {
-          player.cachedBlob = cached.value;
-          prepareCachedAudio(player, cached.value);
+        if (cached?.value?.audioBlob) {
+          player.cachedEntry = cached.value;
+          prepareCachedAudio(player, cached.value.audioBlob);
           updateProgressUI(player);
         }
         return cached;
