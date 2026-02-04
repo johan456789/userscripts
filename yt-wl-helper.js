@@ -33,7 +33,11 @@ const BUTTON_HTML = `
         <span class="yt-icon-shape ytSpecIconShapeHost">
           <div style="width: 100%; height: 100%; display: block; fill: currentcolor;">
             <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" focusable="false" aria-hidden="true" style="pointer-events: none; display: inherit; width: 100%; height: 100%;">
-              <path d="M12 4a2 2 0 100 4 2 2 0 000-4Zm0 6a2 2 0 100 4 2 2 0 000-4Zm0 6a2 2 0 100 4 2 2 0 000-4Z"></path>
+              <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.3">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="6" y1="12" x2="18" y2="12"></line>
+                <line x1="8" y1="18" x2="16" y2="18"></line>
+              </g>
             </svg>
           </div>
         </span>
@@ -45,6 +49,13 @@ const BUTTON_HTML = `
     </yt-touch-feedback-shape>
   </button>
 </yt-button-shape>
+`;
+
+const STYLE_ID = "yt-wl-helper-style";
+const STYLE_TEXT = `
+#${IDS.menuButton} .yt-spec-button-shape-next__icon svg {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
 `;
 
 // To avoid "This document requires 'TrustedHTML' assignment" errors.
@@ -108,7 +119,19 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
 
   const debouncedEnsureButton = debounce(ensureMenuButtonExists, 100);
 
+  function ensureStyles() {
+    if (document.getElementById(STYLE_ID)) {
+      return;
+    }
+
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = STYLE_TEXT;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
   function init() {
+    ensureStyles();
     ensureMenuButtonExists();
 
     const observer = new MutationObserver(debouncedEnsureButton);
@@ -126,4 +149,3 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
 
   init();
 })();
-
