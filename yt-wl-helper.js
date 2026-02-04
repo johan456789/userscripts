@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      0.2.0
+// @version      0.2.1
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-wl-helper.js
@@ -23,6 +23,8 @@ const IDS = {
 const SELECTORS = {
   header: "#header.ytd-item-section-renderer",
   baseChipBar: "#header chip-bar-view-model",
+  sortFilterHeader: "#header ytd-sort-filter-header-renderer",
+  sortFilterMenu: "#header ytd-sort-filter-header-renderer #filter-menu",
   playlistItem: "#contents ytd-playlist-video-renderer",
   durationText:
     "#thumbnail #overlays #time-status #text, #thumbnail #overlays .yt-badge-shape__text",
@@ -132,12 +134,12 @@ let currentFilterId = "all";
     }
   }
 
-  function createFilterBar() {
+  function createFilterBar(extraClassName = "") {
     const filterBar = document.createElement("chip-bar-view-model");
     filterBar.id = IDS.filterBar;
     filterBar.setAttribute(
       "class",
-      "ytChipBarViewModelHost style-scope ytd-item-section-renderer"
+      `ytChipBarViewModelHost style-scope ytd-item-section-renderer ${extraClassName}`.trim()
     );
     filterBar.setAttribute("role", "tablist");
 
@@ -188,15 +190,29 @@ let currentFilterId = "all";
     }
 
     const baseChipBar = header.querySelector(SELECTORS.baseChipBar);
-    if (!baseChipBar) {
-      return false;
+    if (baseChipBar) {
+      const filterBar = createFilterBar();
+      baseChipBar.insertAdjacentElement("afterend", filterBar);
+      logger("Inserted duration filter bar under chip bar");
+      applyFilter(currentFilterId);
+      return true;
     }
 
-    const filterBar = createFilterBar();
-    baseChipBar.insertAdjacentElement("afterend", filterBar);
-    logger("Inserted duration filter bar");
-    applyFilter(currentFilterId);
-    return true;
+    const sortFilterHeader = header.querySelector(SELECTORS.sortFilterHeader);
+    if (sortFilterHeader) {
+      const filterMenu = header.querySelector(SELECTORS.sortFilterMenu);
+      const filterBar = createFilterBar("style-scope ytd-sort-filter-header-renderer");
+      if (filterMenu) {
+        filterMenu.insertAdjacentElement("afterend", filterBar);
+      } else {
+        sortFilterHeader.appendChild(filterBar);
+      }
+      logger("Inserted duration filter bar under sort filter header");
+      applyFilter(currentFilterId);
+      return true;
+    }
+
+    return false;
   }
 
   const debouncedEnsureFilterBar = debounce(ensureFilterBarExists, 100);
