@@ -21,6 +21,8 @@ const IDS = {
   overlay: "yt-wl-helper-url-overlay",
   overlayContent: "yt-wl-helper-url-overlay-content",
   overlayClose: "yt-wl-helper-url-overlay-close",
+  overlayFilters: "yt-wl-helper-url-overlay-filters",
+  overlayList: "yt-wl-helper-url-overlay-list",
 };
 
 const SELECTORS = {
@@ -80,15 +82,32 @@ const STYLE_TEXT = `
   flex-direction: column;
   gap: 12px;
 }
-#${IDS.overlayContent} textarea {
+#${IDS.overlayList} {
   flex: 1;
   width: 100%;
-  resize: none;
-  font-size: 12px;
-  line-height: 1.4;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 #${IDS.overlayClose} {
   align-self: flex-end;
+}
+#${IDS.overlayFilters} {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.yt-wl-helper-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #e6e6e6;
+}
+.yt-wl-helper-item:last-child {
+  border-bottom: none;
+}
+.yt-wl-helper-line {
+  font-size: 12px;
+  line-height: 1.4;
 }
 `;
 
@@ -181,7 +200,9 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
       const container = anchor.closest("ytd-playlist-video-renderer") || anchor.closest("#meta");
       const info = container ? container.querySelector("#byline-container #video-info") : null;
       const durationNode = container
-        ? container.querySelector("#thumbnail #overlays #time-status #text")
+        ? container.querySelector(
+            "#thumbnail #overlays #time-status #text, #thumbnail #overlays .yt-badge-shape__text"
+          )
         : null;
       const duration = durationNode ? durationNode.textContent.trim() : "";
       const infoText = info ? info.textContent : "";
@@ -212,8 +233,36 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     }
   }
 
+  function parseDurationSeconds(durationText) {
+    if (!durationText) {
+      return null;
+    }
+    const parts = durationText
+      .trim()
+      .split(":")
+      .map((part) => Number(part));
+    if (parts.some((part) => Number.isNaN(part))) {
+      return null;
+    }
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    if (parts.length === 1) {
+      return parts[0];
+    }
+    return null;
+  }
+
   function showOverlay(items) {
     closeOverlay();
+
+    const enrichedItems = items.map((item) => ({
+      ...item,
+      durationSeconds: parseDurationSeconds(item.duration),
+    }));
 
     const overlay = document.createElement("div");
     overlay.id = IDS.overlay;
@@ -226,16 +275,125 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     closeButton.textContent = "Close";
     closeButton.addEventListener("click", closeOverlay);
 
-    const textarea = document.createElement("textarea");
-    textarea.readOnly = true;
-    textarea.value = items
-      .map((item) =>
-        [item.title, item.duration, item.views, item.uploadDate, item.url, ""].join("\n")
-      )
-      .join("\n");
+    const filters = [
+      { id: "all", label: "All", matches: () => true },
+      { id: "lt5", label: "<5min", matches: (item) => item.durationSeconds !== null && item.durationSeconds < 300 },
+      {
+        id: "5to25",
+        label: "5-25min",
+        matches: (item) =>
+          item.durationSeconds !== null && item.durationSeconds >= 300 && item.durationSeconds < 1500,
+      },
+      {
+        id: "25to45",
+        label: "25-45min",
+        matches: (item) =>
+          item.durationSeconds !== null &&
+          item.durationSeconds >= 1500 &&
+          item.durationSeconds < 2700,
+      },
+      {
+        id: "gt45",
+        label: ">45min",
+        matches: (item) => item.durationSeconds !== null && item.durationSeconds >= 2700,
+      },
+    ];
+
+    const filterBar = document.createElement("div");
+    filterBar.id = IDS.overlayFilters;
+    filterBar.setAttribute("role", "tablist");
+
+    const list = document.createElement("div");
+    list.id = IDS.overlayList;
+
+    const itemElements = enrichedItems.map((item) => {
+      const itemEl = document.createElement("div");
+      itemEl.className = "yt-wl-helper-item";
+      itemEl.dataset.durationSeconds =
+        item.durationSeconds === null ? "" : String(item.durationSeconds);
+
+      const title = document.createElement("div");
+      title.className = "yt-wl-helper-line";
+      title.textContent = item.title;
+
+      const duration = document.createElement("div");
+      duration.className = "yt-wl-helper-line";
+      duration.textContent = item.duration;
+
+      const views = document.createElement("div");
+      views.className = "yt-wl-helper-line";
+      views.textContent = item.views;
+
+      const uploadDate = document.createElement("div");
+      uploadDate.className = "yt-wl-helper-line";
+      uploadDate.textContent = item.uploadDate;
+
+      const url = document.createElement("div");
+      url.className = "yt-wl-helper-line";
+      url.textContent = item.url;
+
+      itemEl.appendChild(title);
+      itemEl.appendChild(duration);
+      itemEl.appendChild(views);
+      itemEl.appendChild(uploadDate);
+      itemEl.appendChild(url);
+      return itemEl;
+    });
+
+    itemElements.forEach((itemEl) => list.appendChild(itemEl));
+
+    function applyFilter(filterId) {
+      const active = filters.find((filter) => filter.id === filterId) || filters[0];
+      itemElements.forEach((itemEl, index) => {
+        const item = enrichedItems[index];
+        itemEl.style.display = active.matches(item) ? "" : "none";
+      });
+
+      const buttons = filterBar.querySelectorAll("button[role='tab']");
+      buttons.forEach((button) => {
+        const isActive = button.dataset.filterId === active.id;
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+        const chip = button.querySelector(".ytChipShapeChip");
+        if (chip) {
+          chip.classList.toggle("ytChipShapeActive", isActive);
+          chip.classList.toggle("ytChipShapeInactive", !isActive);
+        }
+      });
+    }
+
+    filters.forEach((filter, index) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "ytChipBarViewModelChipWrapper";
+
+      const chipView = document.createElement("chip-view-model");
+      chipView.className = "ytChipViewModelHost";
+
+      const chipShape = document.createElement("chip-shape");
+      chipShape.className = "ytChipShapeHost";
+
+      const button = document.createElement("button");
+      button.className = "ytChipShapeButtonReset";
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-label", filter.label);
+      button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+      button.dataset.filterId = filter.id;
+
+      const chip = document.createElement("div");
+      chip.className = `ytChipShapeChip ${index === 0 ? "ytChipShapeActive" : "ytChipShapeInactive"} ytChipShapeOnlyTextPadding`;
+      chip.textContent = filter.label;
+
+      button.appendChild(chip);
+      chipShape.appendChild(button);
+      chipView.appendChild(chipShape);
+      wrapper.appendChild(chipView);
+      filterBar.appendChild(wrapper);
+
+      button.addEventListener("click", () => applyFilter(filter.id));
+    });
 
     content.appendChild(closeButton);
-    content.appendChild(textarea);
+    content.appendChild(filterBar);
+    content.appendChild(list);
     overlay.appendChild(content);
 
     overlay.addEventListener("click", (event) => {
@@ -245,6 +403,7 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     });
 
     document.body.appendChild(overlay);
+    applyFilter("all");
   }
 
   function bindMenuButton(buttonShape) {
