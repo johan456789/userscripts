@@ -113,8 +113,12 @@ const STYLE_TEXT = `
   flex-wrap: wrap;
 }
 .yt-wl-helper-item {
+  display: block;
   padding: 8px 0;
   border-bottom: 1px solid #e6e6e6;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
 .yt-wl-helper-item:last-child {
   border-bottom: none;
@@ -200,17 +204,30 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     (document.head || document.documentElement).appendChild(style);
   }
 
+  function toWatchUrl(rawUrl) {
+    try {
+      const parsed = new URL(rawUrl, window.location.origin);
+      const videoId = parsed.searchParams.get("v");
+      if (!videoId) {
+        return null;
+      }
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    } catch (error) {
+      return null;
+    }
+  }
+
   function collectVisibleItems() {
     const anchors = Array.from(document.querySelectorAll("a#video-title"));
     const items = [];
     const seen = new Set();
 
     anchors.forEach((anchor) => {
-      const url = anchor.href;
-      if (!url || !url.includes("watch?v=") || seen.has(url)) {
+      const watchUrl = toWatchUrl(anchor.href);
+      if (!watchUrl || seen.has(watchUrl)) {
         return;
       }
-      seen.add(url);
+      seen.add(watchUrl);
 
       const title = anchor.getAttribute("title") || anchor.textContent.trim();
       const container = anchor.closest("ytd-playlist-video-renderer") || anchor.closest("#meta");
@@ -235,7 +252,7 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
         duration,
         views,
         uploadDate,
-        url,
+        url: watchUrl,
       });
     });
 
@@ -349,10 +366,13 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     list.id = IDS.overlayList;
 
     const itemElements = enrichedItems.map((item) => {
-      const itemEl = document.createElement("div");
+      const itemEl = document.createElement("a");
       itemEl.className = "yt-wl-helper-item";
       itemEl.dataset.durationSeconds =
         item.durationSeconds === null ? "" : String(item.durationSeconds);
+      itemEl.href = item.url;
+      itemEl.target = "_self";
+      itemEl.rel = "noopener";
 
       const title = document.createElement("div");
       title.className = "yt-wl-helper-line";
