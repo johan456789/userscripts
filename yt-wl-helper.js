@@ -165,12 +165,44 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     (document.head || document.documentElement).appendChild(style);
   }
 
-  function collectVisibleUrls() {
+  function collectVisibleItems() {
     const anchors = Array.from(document.querySelectorAll("a#video-title"));
-    const urls = anchors
-      .map((anchor) => anchor.href)
-      .filter((href) => href && href.includes("watch?v="));
-    return Array.from(new Set(urls));
+    const items = [];
+    const seen = new Set();
+
+    anchors.forEach((anchor) => {
+      const url = anchor.href;
+      if (!url || !url.includes("watch?v=") || seen.has(url)) {
+        return;
+      }
+      seen.add(url);
+
+      const title = anchor.getAttribute("title") || anchor.textContent.trim();
+      const container = anchor.closest("ytd-playlist-video-renderer") || anchor.closest("#meta");
+      const info = container ? container.querySelector("#byline-container #video-info") : null;
+      const durationNode = container
+        ? container.querySelector("#thumbnail #overlays #time-status #text")
+        : null;
+      const duration = durationNode ? durationNode.textContent.trim() : "";
+      const infoText = info ? info.textContent : "";
+      const parts = infoText
+        .split("•")
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      const views = parts[0] || "";
+      const uploadDate = parts[1] || "";
+
+      items.push({
+        title,
+        duration,
+        views,
+        uploadDate,
+        url,
+      });
+    });
+
+    return items;
   }
 
   function closeOverlay() {
@@ -180,7 +212,7 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     }
   }
 
-  function showOverlay(urls) {
+  function showOverlay(items) {
     closeOverlay();
 
     const overlay = document.createElement("div");
@@ -196,7 +228,11 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
 
     const textarea = document.createElement("textarea");
     textarea.readOnly = true;
-    textarea.value = urls.join("\n");
+    textarea.value = items
+      .map((item) =>
+        [item.title, item.duration, item.views, item.uploadDate, item.url, ""].join("\n")
+      )
+      .join("\n");
 
     content.appendChild(closeButton);
     content.appendChild(textarea);
@@ -225,9 +261,9 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      const urls = collectVisibleUrls();
-      logger(`Collected ${urls.length} URLs`);
-      showOverlay(urls);
+      const items = collectVisibleItems();
+      logger(`Collected ${items.length} items`);
+      showOverlay(items);
     });
   }
 
