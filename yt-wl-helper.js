@@ -72,26 +72,40 @@ const STYLE_TEXT = `
 }
 #${IDS.overlayContent} {
   width: min(900px, 90vw);
-  height: min(70vh, 600px);
-  background: #fff;
-  color: #111;
   padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: min(70vh, 600px);
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
 }
 #${IDS.overlayList} {
   flex: 1;
   width: 100%;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  min-width: 0;
 }
-#${IDS.overlayClose} {
-  align-self: flex-end;
+#${IDS.overlay} .yt-spec-dialog-layout__dialog-layout-container,
+#${IDS.overlay} .yt-spec-dialog-layout__dialog-layout-content {
+  overflow: hidden;
+  max-height: min(70vh, 600px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#${IDS.overlay} .yt-spec-dialog-layout__dialog-layout-content-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 #${IDS.overlayFilters} {
   display: flex;
@@ -108,6 +122,8 @@ const STYLE_TEXT = `
 .yt-wl-helper-line {
   font-size: 12px;
   line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 `;
 
@@ -267,13 +283,38 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     const overlay = document.createElement("div");
     overlay.id = IDS.overlay;
 
+    const dialogHost = document.createElement("yt-dialog-view-model");
+    dialogHost.className = "ytDialogViewModelHost ytDialogViewModelResetSpacing";
+    dialogHost.setAttribute("dialog", "true");
+    dialogHost.tabIndex = -1;
+
+    const dialogLayout = document.createElement("dialog-layout");
+    dialogLayout.className = "yt-spec-dialog-layout yt-spec-dialog-layout--dialog-layout-responsive";
+
+    const headerContainer = document.createElement("div");
+    headerContainer.className = "yt-spec-dialog-layout__dialog-header-container";
+
+    const header = document.createElement("yt-dialog-header-view-model");
+    header.className = "ytDialogHeaderViewModelHost ytDialogHeaderViewModelHostDisablePadding";
+
+    const headerTitle = document.createElement("h2");
+    const headerText = document.createElement("span");
+    headerText.className =
+      "yt-core-attributed-string ytDialogHeaderViewModelText yt-core-attributed-string--white-space-pre-wrap";
+    headerText.textContent = "Watch later items";
+    headerTitle.appendChild(headerText);
+    header.appendChild(headerTitle);
+    headerContainer.appendChild(header);
+
+    const layoutContainer = document.createElement("div");
+    layoutContainer.className = "yt-spec-dialog-layout__dialog-layout-container";
+
+    const layoutContent = document.createElement("div");
+    layoutContent.className = "yt-spec-dialog-layout__dialog-layout-content";
+
     const content = document.createElement("div");
     content.id = IDS.overlayContent;
-
-    const closeButton = document.createElement("button");
-    closeButton.id = IDS.overlayClose;
-    closeButton.textContent = "Close";
-    closeButton.addEventListener("click", closeOverlay);
+    content.className = "yt-spec-dialog-layout__dialog-layout-content-inner";
 
     const filters = [
       { id: "all", label: "All", matches: () => true },
@@ -299,8 +340,9 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
       },
     ];
 
-    const filterBar = document.createElement("div");
+    const filterBar = document.createElement("chip-bar-view-model");
     filterBar.id = IDS.overlayFilters;
+    filterBar.className = "ytChipBarViewModelHost";
     filterBar.setAttribute("role", "tablist");
 
     const list = document.createElement("div");
@@ -391,10 +433,15 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
       button.addEventListener("click", () => applyFilter(filter.id));
     });
 
-    content.appendChild(closeButton);
     content.appendChild(filterBar);
     content.appendChild(list);
-    overlay.appendChild(content);
+
+    layoutContent.appendChild(content);
+    layoutContainer.appendChild(layoutContent);
+    dialogLayout.appendChild(headerContainer);
+    dialogLayout.appendChild(layoutContainer);
+    dialogHost.appendChild(dialogLayout);
+    overlay.appendChild(dialogHost);
 
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) {
