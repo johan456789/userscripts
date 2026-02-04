@@ -18,6 +18,9 @@ logger("Userscript started.");
 
 const IDS = {
   menuButton: "yt-wl-helper-menu-button",
+  overlay: "yt-wl-helper-url-overlay",
+  overlayContent: "yt-wl-helper-url-overlay-content",
+  overlayClose: "yt-wl-helper-url-overlay-close",
 };
 
 const SELECTORS = {
@@ -55,6 +58,37 @@ const STYLE_ID = "yt-wl-helper-style";
 const STYLE_TEXT = `
 #${IDS.menuButton} .yt-spec-button-shape-next__icon svg {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
+#${IDS.overlay} {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+#${IDS.overlayContent} {
+  width: min(900px, 90vw);
+  height: min(70vh, 600px);
+  background: #fff;
+  color: #111;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#${IDS.overlayContent} textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  font-size: 12px;
+  line-height: 1.4;
+}
+#${IDS.overlayClose} {
+  align-self: flex-end;
 }
 `;
 
@@ -113,6 +147,7 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     }
 
     container.appendChild(button);
+    bindMenuButton(button);
     logger("Inserted playlist helper button");
     return true;
   }
@@ -128,6 +163,72 @@ const dangerouslyEscapeHTMLPolicy = trustedTypes.createPolicy("forceInner", {
     style.id = STYLE_ID;
     style.textContent = STYLE_TEXT;
     (document.head || document.documentElement).appendChild(style);
+  }
+
+  function collectVisibleUrls() {
+    const anchors = Array.from(document.querySelectorAll("a#video-title"));
+    const urls = anchors
+      .map((anchor) => anchor.href)
+      .filter((href) => href && href.includes("watch?v="));
+    return Array.from(new Set(urls));
+  }
+
+  function closeOverlay() {
+    const overlay = document.getElementById(IDS.overlay);
+    if (overlay) {
+      overlay.remove();
+    }
+  }
+
+  function showOverlay(urls) {
+    closeOverlay();
+
+    const overlay = document.createElement("div");
+    overlay.id = IDS.overlay;
+
+    const content = document.createElement("div");
+    content.id = IDS.overlayContent;
+
+    const closeButton = document.createElement("button");
+    closeButton.id = IDS.overlayClose;
+    closeButton.textContent = "Close";
+    closeButton.addEventListener("click", closeOverlay);
+
+    const textarea = document.createElement("textarea");
+    textarea.readOnly = true;
+    textarea.value = urls.join("\n");
+
+    content.appendChild(closeButton);
+    content.appendChild(textarea);
+    overlay.appendChild(content);
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        closeOverlay();
+      }
+    });
+
+    document.body.appendChild(overlay);
+  }
+
+  function bindMenuButton(buttonShape) {
+    if (!buttonShape || buttonShape.dataset.ytWlHelperBound === "true") {
+      return;
+    }
+    buttonShape.dataset.ytWlHelperBound = "true";
+
+    const button = buttonShape.querySelector("button");
+    if (!button) {
+      return;
+    }
+
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const urls = collectVisibleUrls();
+      logger(`Collected ${urls.length} URLs`);
+      showOverlay(urls);
+    });
   }
 
   function init() {
