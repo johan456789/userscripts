@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      0.1.0
+// @version      0.2.0
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-wl-helper.js
@@ -73,19 +73,32 @@ let currentFilterId = "all";
   }
 
   function getDurationSeconds(item) {
-    if (item.dataset.ytWlHelperDuration !== undefined) {
-      const cached = item.dataset.ytWlHelperDuration;
-      if (cached === "") {
-        return null;
-      }
+    const cached = item.dataset.ytWlHelperDuration;
+    if (cached) {
       const value = Number(cached);
       return Number.isNaN(value) ? null : value;
     }
+    if (cached === "unknown") {
+      return null;
+    }
 
     const durationNode = item.querySelector(SELECTORS.durationText);
-    const durationText = durationNode ? durationNode.textContent.trim() : "";
+    if (!durationNode) {
+      return null;
+    }
+
+    const durationText = durationNode.textContent.trim();
+    if (!durationText) {
+      return null;
+    }
+
     const seconds = parseDurationSeconds(durationText);
-    item.dataset.ytWlHelperDuration = seconds === null ? "" : String(seconds);
+    if (seconds === null) {
+      item.dataset.ytWlHelperDuration = "unknown";
+      return null;
+    }
+
+    item.dataset.ytWlHelperDuration = String(seconds);
     return seconds;
   }
 
