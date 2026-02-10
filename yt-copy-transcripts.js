@@ -6,9 +6,8 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.4
+// @version      2.3.5
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
-// @require      https://gist.github.com/johan456789/89c50735911afb7251c3a6a3d06f5657/raw/gistfile1.txt
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // ==/UserScript==
@@ -56,10 +55,19 @@ const cssText = `
 (function () {
   "use strict";
 
+  function getFetchTranscript() {
+    if (typeof YoutubeTranscriptPlusLib?.fetchTranscript === "function") {
+      return YoutubeTranscriptPlusLib.fetchTranscript;
+    }
+
+    throw new Error("youtube-transcript-plus fetchTranscript is not available");
+  }
+
   async function prefetchTranscript() {
     try {
       const videoId = getVideoId();
-      const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+      const fetchTranscript = getFetchTranscript();
+      const transcript = await fetchTranscript(videoId);
       if (transcript) {
         const fullTranscript = transcript
           .map((item) => decodeHtmlEntities(item.text))
@@ -413,4 +421,236 @@ const cssText = `
   }
 
   init();
+})();
+
+
+// vendored from https://github.com/ericmmartin/youtube-transcript-plus
+// MIT License
+const YoutubeTranscriptPlusLib = (() => {
+  const DEFAULT_USER_AGENT =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  const RE_YOUTUBE =
+    /(?:v=|\/|v\/|embed\/|watch\?.*v=|youtu\.be\/|\/v\/|e\/|watch\?.*vi?=|\/embed\/|\/v\/|vi?\/|watch\?.*vi?=|youtu\.be\/|\/vi?\/|\/e\/)([a-zA-Z0-9_-]{11})/i;
+  const RE_XML_TRANSCRIPT = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
+
+  class YoutubeTranscriptTooManyRequestError extends Error {
+    constructor() {
+      super(
+        "YouTube is receiving too many requests from your IP address. Please try again later or use a proxy."
+      );
+      this.name = "YoutubeTranscriptTooManyRequestError";
+    }
+  }
+
+  class YoutubeTranscriptVideoUnavailableError extends Error {
+    constructor(videoId) {
+      super(
+        `The video with ID "${videoId}" is no longer available or has been removed.`
+      );
+      this.name = "YoutubeTranscriptVideoUnavailableError";
+    }
+  }
+
+  class YoutubeTranscriptDisabledError extends Error {
+    constructor(videoId) {
+      super(`Transcripts are disabled for the video with ID "${videoId}".`);
+      this.name = "YoutubeTranscriptDisabledError";
+    }
+  }
+
+  class YoutubeTranscriptNotAvailableError extends Error {
+    constructor(videoId) {
+      super(`No transcripts are available for the video with ID "${videoId}".`);
+      this.name = "YoutubeTranscriptNotAvailableError";
+    }
+  }
+
+  class YoutubeTranscriptNotAvailableLanguageError extends Error {
+    constructor(lang, availableLangs, videoId) {
+      super(
+        `No transcripts are available in "${lang}" for "${videoId}". Available languages: ${availableLangs.join(
+          ", "
+        )}.`
+      );
+      this.name = "YoutubeTranscriptNotAvailableLanguageError";
+    }
+  }
+
+  class YoutubeTranscriptInvalidVideoIdError extends Error {
+    constructor() {
+      super(
+        'Invalid YouTube video ID or URL. Example: "dQw4w9WgXcQ" or "https://www.youtube.com/watch?v=dQw4w9WgXcQ".'
+      );
+      this.name = "YoutubeTranscriptInvalidVideoIdError";
+    }
+  }
+
+  function retrieveVideoId(videoId) {
+    if (typeof videoId !== "string") {
+      throw new YoutubeTranscriptInvalidVideoIdError();
+    }
+    if (videoId.length === 11) {
+      return videoId;
+    }
+    const matchId = videoId.match(RE_YOUTUBE);
+    if (matchId && matchId.length) {
+      return matchId[1];
+    }
+    throw new YoutubeTranscriptInvalidVideoIdError();
+  }
+
+  async function defaultFetch(params) {
+    const { url, lang, method = "GET", body, headers = {} } = params;
+    const fetchHeaders = {
+      ...(lang ? { "Accept-Language": lang } : null),
+      ...headers,
+    };
+
+    const fetchOptions = { method, headers: fetchHeaders };
+    if (body && method === "POST") {
+      fetchOptions.body = body;
+    }
+    return fetch(url, fetchOptions);
+  }
+
+  class YoutubeTranscript {
+    constructor(config) {
+      this.config = config || {};
+    }
+
+    async fetchTranscript(videoId) {
+      const identifier = retrieveVideoId(videoId);
+      const lang = this.config.lang;
+      const protocol = this.config.disableHttps ? "http" : "https";
+
+      const watchUrl = `${protocol}://www.youtube.com/watch?v=${identifier}`;
+      const videoPageResponse = this.config.videoFetch
+        ? await this.config.videoFetch({ url: watchUrl, lang })
+        : await defaultFetch({ url: watchUrl, lang });
+
+      if (!videoPageResponse.ok) {
+        throw new YoutubeTranscriptVideoUnavailableError(identifier);
+      }
+
+      const videoPageBody = await videoPageResponse.text();
+      if (videoPageBody.includes('class="g-recaptcha"')) {
+        throw new YoutubeTranscriptTooManyRequestError();
+      }
+
+      const apiKeyMatch =
+        videoPageBody.match(/"INNERTUBE_API_KEY":"([^"]+)"/) ||
+        videoPageBody.match(/INNERTUBE_API_KEY\\":\\"([^\\"]+)\\"/);
+      if (!apiKeyMatch) {
+        throw new YoutubeTranscriptNotAvailableError(identifier);
+      }
+      const apiKey = apiKeyMatch[1];
+
+      const playerEndpoint = `https://www.youtube.com/youtubei/v1/player?key=${apiKey}`;
+      const playerBody = {
+        context: {
+          client: {
+            clientName: "ANDROID",
+            clientVersion: "20.10.38",
+          },
+        },
+        videoId: identifier,
+      };
+
+      const playerFetchParams = {
+        url: playerEndpoint,
+        method: "POST",
+        lang,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(playerBody),
+      };
+      const playerRes = this.config.playerFetch
+        ? await this.config.playerFetch(playerFetchParams)
+        : await defaultFetch(playerFetchParams);
+
+      if (!playerRes.ok) {
+        throw new YoutubeTranscriptVideoUnavailableError(identifier);
+      }
+
+      const playerJson = await playerRes.json();
+      const tracklist =
+        playerJson?.captions?.playerCaptionsTracklistRenderer ??
+        playerJson?.playerCaptionsTracklistRenderer;
+      const tracks = tracklist?.captionTracks;
+      const isPlayableOk = playerJson?.playabilityStatus?.status === "OK";
+
+      if (!playerJson?.captions || !tracklist) {
+        if (isPlayableOk) {
+          throw new YoutubeTranscriptDisabledError(identifier);
+        }
+        throw new YoutubeTranscriptNotAvailableError(identifier);
+      }
+
+      if (!Array.isArray(tracks) || tracks.length === 0) {
+        throw new YoutubeTranscriptDisabledError(identifier);
+      }
+
+      const selectedTrack = lang
+        ? tracks.find((t) => t.languageCode === lang)
+        : tracks[0];
+      if (!selectedTrack) {
+        const available = tracks.map((t) => t.languageCode).filter(Boolean);
+        throw new YoutubeTranscriptNotAvailableLanguageError(
+          lang,
+          available,
+          identifier
+        );
+      }
+
+      let transcriptURL = selectedTrack.baseUrl || selectedTrack.url;
+      if (!transcriptURL) {
+        throw new YoutubeTranscriptNotAvailableError(identifier);
+      }
+      transcriptURL = transcriptURL.replace(/&fmt=[^&]+$/, "");
+      if (this.config.disableHttps) {
+        transcriptURL = transcriptURL.replace(/^https:\/\//, "http://");
+      }
+
+      const transcriptResponse = this.config.transcriptFetch
+        ? await this.config.transcriptFetch({
+            url: transcriptURL,
+            lang,
+          })
+        : await defaultFetch({ url: transcriptURL, lang });
+      if (!transcriptResponse.ok) {
+        if (transcriptResponse.status === 429) {
+          throw new YoutubeTranscriptTooManyRequestError();
+        }
+        throw new YoutubeTranscriptNotAvailableError(identifier);
+      }
+
+      const transcriptBody = await transcriptResponse.text();
+      const results = [...transcriptBody.matchAll(RE_XML_TRANSCRIPT)];
+      const transcript = results.map((m) => ({
+        text: m[3],
+        duration: parseFloat(m[2]),
+        offset: parseFloat(m[1]),
+        lang: lang || selectedTrack.languageCode,
+      }));
+      if (transcript.length === 0) {
+        throw new YoutubeTranscriptNotAvailableError(identifier);
+      }
+      return transcript;
+    }
+
+    static async fetchTranscript(videoId, config) {
+      return new YoutubeTranscript(config).fetchTranscript(videoId);
+    }
+  }
+
+  return {
+    fetchTranscript: YoutubeTranscript.fetchTranscript,
+    YoutubeTranscript,
+    YoutubeTranscriptTooManyRequestError,
+    YoutubeTranscriptVideoUnavailableError,
+    YoutubeTranscriptDisabledError,
+    YoutubeTranscriptNotAvailableError,
+    YoutubeTranscriptNotAvailableLanguageError,
+    YoutubeTranscriptInvalidVideoIdError,
+    DEFAULT_USER_AGENT,
+  };
 })();
