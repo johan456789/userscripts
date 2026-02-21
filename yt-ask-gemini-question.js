@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.3
+// @version      1.0.4
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -18,11 +18,14 @@ const SELECTORS = {
     "#items > yt-video-description-youchat-section-view-model > div.ytVideoDescriptionYouchatSectionViewModelPrimaryButton > button-view-model > button",
   panelCloseTrigger:
     "#visibility-button > ytd-button-renderer > yt-button-shape > button",
+  descriptionContainer: "#above-the-fold #description",
 };
 const TAGS = { wrapper: "yt-button-view-model" };
 
 const logger = Logger("[YT-ask-gemini-question]");
 logger("Userscript started.");
+let lastDescriptionExpandAttemptMs = 0;
+const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
 
 const ytBtnClassList =
   "yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-filter-experiment"
@@ -49,6 +52,10 @@ const cssText = `
 
   function getPanelCloseButton() {
     return document.querySelector(SELECTORS.panelCloseTrigger);
+  }
+
+  function getDescriptionContainer() {
+    return document.querySelector(SELECTORS.descriptionContainer);
   }
 
   function isElementInteractable(element) {
@@ -88,6 +95,27 @@ const cssText = `
     return isElementInteractable(geminiButton) ? geminiButton : null;
   }
 
+  function tryExpandDescription() {
+    if (getActiveCloseButton() || getActiveGeminiButton()) {
+      return false;
+    }
+
+    const now = Date.now();
+    if (now - lastDescriptionExpandAttemptMs < DESCRIPTION_EXPAND_COOLDOWN_MS) {
+      return false;
+    }
+
+    const descriptionContainer = getDescriptionContainer();
+    if (!isElementInteractable(descriptionContainer)) {
+      return false;
+    }
+
+    descriptionContainer.click();
+    lastDescriptionExpandAttemptMs = now;
+    logger("Clicked #description to expand section");
+    return true;
+  }
+
   function updateAskGeminiButtonState() {
     const askButton = document.querySelector(`#${IDS.askGeminiButton} button`);
     if (!askButton) {
@@ -98,6 +126,10 @@ const cssText = `
     const currentTarget = closeButton || getActiveGeminiButton();
     askButton.dataset.askPanelVisible = String(Boolean(closeButton));
     askButton.toggleAttribute("disabled", !currentTarget);
+
+    if (!currentTarget && tryExpandDescription()) {
+      setTimeout(updateAskGeminiButtonState, 150);
+    }
   }
 
   function createAskGeminiIcon() {
@@ -193,6 +225,24 @@ const cssText = `
 
       const geminiButton = getActiveGeminiButton();
       if (!geminiButton) {
+        if (tryExpandDescription()) {
+          logger("Expanded description, retrying Gemini open");
+          setTimeout(() => {
+            const retryGeminiButton = getActiveGeminiButton();
+            if (!retryGeminiButton) {
+              logger("Gemini target button not available after expand");
+              updateAskGeminiButtonState();
+              return;
+            }
+            retryGeminiButton.click();
+            logger(
+              "Clicked Gemini target button after expanding description (panel visible)"
+            );
+            setTimeout(updateAskGeminiButtonState, 100);
+          }, 150);
+          return;
+        }
+
         logger("Gemini target button not available");
         updateAskGeminiButtonState();
         return;
@@ -256,6 +306,7 @@ const cssText = `
 
     const button = addAskGeminiButton();
     if (button) {
+      tryExpandDescription();
       updateAskGeminiButtonState();
     }
   }
