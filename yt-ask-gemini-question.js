@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.0
+// @version      1.0.1
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -16,11 +16,14 @@ const SELECTORS = {
   topButtons: "#top-row #actions #menu #top-level-buttons-computed",
   geminiTrigger:
     "#items > yt-video-description-youchat-section-view-model > div.ytVideoDescriptionYouchatSectionViewModelPrimaryButton > button-view-model > button",
+  panelCloseTrigger:
+    "#visibility-button > ytd-button-renderer > yt-button-shape > button",
 };
 const TAGS = { wrapper: "yt-button-view-model" };
 
 const logger = Logger("[YT-ask-gemini-question]");
 logger("Userscript started.");
+let askPanelVisible = false;
 
 const ytBtnClassList =
   "yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-filter-experiment"
@@ -45,13 +48,28 @@ const cssText = `
     return document.querySelector(SELECTORS.geminiTrigger);
   }
 
+  function getPanelCloseButton() {
+    return document.querySelector(SELECTORS.panelCloseTrigger);
+  }
+
+  function setAskPanelVisible(nextState) {
+    askPanelVisible = nextState;
+    const askButton = document.querySelector(`#${IDS.askGeminiButton} button`);
+    if (askButton) {
+      askButton.dataset.askPanelVisible = String(askPanelVisible);
+    }
+  }
+
   function updateAskGeminiButtonState() {
     const askButton = document.querySelector(`#${IDS.askGeminiButton} button`);
     if (!askButton) {
       return;
     }
 
-    askButton.toggleAttribute("disabled", !getGeminiTargetButton());
+    const currentTarget = askPanelVisible
+      ? getPanelCloseButton()
+      : getGeminiTargetButton();
+    askButton.toggleAttribute("disabled", !currentTarget);
   }
 
   function createAskGeminiIcon() {
@@ -137,15 +155,31 @@ const cssText = `
     const button = document.createElement("button");
     button.classList.add(...ytBtnClassList);
     button.addEventListener("click", () => {
-      const geminiButton = getGeminiTargetButton();
-      if (!geminiButton) {
-        logger("Gemini target button not found");
+      if (!askPanelVisible) {
+        const geminiButton = getGeminiTargetButton();
+        if (!geminiButton) {
+          logger("Gemini target button not found");
+          updateAskGeminiButtonState();
+          return;
+        }
+
+        geminiButton.click();
+        setAskPanelVisible(true);
+        logger("Clicked Gemini target button (panel visible)");
+        setTimeout(updateAskGeminiButtonState, 100);
+        return;
+      }
+
+      const closeButton = getPanelCloseButton();
+      if (!closeButton) {
+        logger("Panel close button not found. Keeping visible state.");
         updateAskGeminiButtonState();
         return;
       }
 
-      geminiButton.click();
-      logger("Clicked Gemini target button");
+      closeButton.click();
+      setAskPanelVisible(false);
+      logger("Clicked panel close button (panel hidden)");
       setTimeout(updateAskGeminiButtonState, 100);
     });
 
@@ -197,6 +231,7 @@ const cssText = `
 
   function ensureAskGeminiButton() {
     if (!isWatchPage()) {
+      setAskPanelVisible(false);
       return;
     }
 
@@ -204,6 +239,11 @@ const cssText = `
     if (button) {
       updateAskGeminiButtonState();
     }
+  }
+
+  function handleNavigationRefresh() {
+    setAskPanelVisible(Boolean(getPanelCloseButton()));
+    ensureAskGeminiButton();
   }
 
   function init() {
@@ -220,17 +260,17 @@ const cssText = `
       subtree: true,
     });
 
-    window.addEventListener("yt-navigate-finish", ensureAskGeminiButton);
+    window.addEventListener("yt-navigate-finish", handleNavigationRefresh);
 
     let lastUrl = window.location.href;
     setInterval(() => {
       if (window.location.href !== lastUrl) {
         lastUrl = window.location.href;
-        ensureAskGeminiButton();
+        handleNavigationRefresh();
       }
     }, 250);
 
-    ensureAskGeminiButton();
+    handleNavigationRefresh();
   }
 
   init();
