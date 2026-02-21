@@ -5,7 +5,7 @@
 // @grant        none
 // @run-at       document-end
 // @noframes
-// @version      0.1.1
+// @version      0.1.2
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-notifications-filter.js
@@ -25,6 +25,7 @@ const SELECTORS = {
   notificationHeader: "#header ytd-simple-menu-header-renderer",
   notificationButtons: "#buttons.ytd-simple-menu-header-renderer",
   notificationItem: "ytd-notification-renderer",
+  notificationMessage: "yt-formatted-string.message",
   notificationSection: "yt-multi-page-menu-section-renderer",
   notificationSectionTitle: "#section-title",
   notificationSectionItems: "#items",
@@ -103,6 +104,7 @@ let currentFilterId = "videos";
 
     const items = Array.from(menu.querySelectorAll(SELECTORS.notificationItem));
     items.forEach((item) => {
+      simplifyNotificationMessage(item);
       const type = getNotificationType(item);
       item.style.display = filter.matches(type) ? "" : "none";
     });
@@ -135,6 +137,26 @@ let currentFilterId = "videos";
     );
 
     return { title, hasVisibleItems };
+  }
+
+  function simplifyNotificationMessage(item) {
+    const message = item.querySelector(SELECTORS.notificationMessage);
+    if (!message) {
+      return;
+    }
+
+    const text = message.textContent.trim();
+    if (!text) {
+      return;
+    }
+
+    // Reduce clutter by dropping "CHANNEL_NAME uploaded:" and keeping only the title.
+    const simplified = text.replace(/^.+?\s+uploaded:\s*/i, "");
+    if (!simplified || simplified === text) {
+      return;
+    }
+
+    message.textContent = simplified;
   }
 
   function createFilterBar(menu) {
