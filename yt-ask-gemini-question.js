@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.1
+// @version      1.0.3
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -23,7 +23,6 @@ const TAGS = { wrapper: "yt-button-view-model" };
 
 const logger = Logger("[YT-ask-gemini-question]");
 logger("Userscript started.");
-let askPanelVisible = false;
 
 const ytBtnClassList =
   "yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-filter-experiment"
@@ -52,12 +51,41 @@ const cssText = `
     return document.querySelector(SELECTORS.panelCloseTrigger);
   }
 
-  function setAskPanelVisible(nextState) {
-    askPanelVisible = nextState;
-    const askButton = document.querySelector(`#${IDS.askGeminiButton} button`);
-    if (askButton) {
-      askButton.dataset.askPanelVisible = String(askPanelVisible);
+  function isElementInteractable(element) {
+    if (!element || !element.isConnected) {
+      return false;
     }
+
+    if (element.disabled || element.getAttribute("aria-disabled") === "true") {
+      return false;
+    }
+
+    if (element.closest("[hidden], [aria-hidden='true']")) {
+      return false;
+    }
+
+    const style = window.getComputedStyle(element);
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.visibility === "collapse" ||
+      style.pointerEvents === "none"
+    ) {
+      return false;
+    }
+
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function getActiveCloseButton() {
+    const closeButton = getPanelCloseButton();
+    return isElementInteractable(closeButton) ? closeButton : null;
+  }
+
+  function getActiveGeminiButton() {
+    const geminiButton = getGeminiTargetButton();
+    return isElementInteractable(geminiButton) ? geminiButton : null;
   }
 
   function updateAskGeminiButtonState() {
@@ -66,9 +94,9 @@ const cssText = `
       return;
     }
 
-    const currentTarget = askPanelVisible
-      ? getPanelCloseButton()
-      : getGeminiTargetButton();
+    const closeButton = getActiveCloseButton();
+    const currentTarget = closeButton || getActiveGeminiButton();
+    askButton.dataset.askPanelVisible = String(Boolean(closeButton));
     askButton.toggleAttribute("disabled", !currentTarget);
   }
 
@@ -155,31 +183,23 @@ const cssText = `
     const button = document.createElement("button");
     button.classList.add(...ytBtnClassList);
     button.addEventListener("click", () => {
-      if (!askPanelVisible) {
-        const geminiButton = getGeminiTargetButton();
-        if (!geminiButton) {
-          logger("Gemini target button not found");
-          updateAskGeminiButtonState();
-          return;
-        }
-
-        geminiButton.click();
-        setAskPanelVisible(true);
-        logger("Clicked Gemini target button (panel visible)");
+      const closeButton = getActiveCloseButton();
+      if (closeButton) {
+        closeButton.click();
+        logger("Clicked panel close button (panel hidden)");
         setTimeout(updateAskGeminiButtonState, 100);
         return;
       }
 
-      const closeButton = getPanelCloseButton();
-      if (!closeButton) {
-        logger("Panel close button not found. Keeping visible state.");
+      const geminiButton = getActiveGeminiButton();
+      if (!geminiButton) {
+        logger("Gemini target button not available");
         updateAskGeminiButtonState();
         return;
       }
 
-      closeButton.click();
-      setAskPanelVisible(false);
-      logger("Clicked panel close button (panel hidden)");
+      geminiButton.click();
+      logger("Clicked Gemini target button (panel visible)");
       setTimeout(updateAskGeminiButtonState, 100);
     });
 
@@ -231,7 +251,6 @@ const cssText = `
 
   function ensureAskGeminiButton() {
     if (!isWatchPage()) {
-      setAskPanelVisible(false);
       return;
     }
 
@@ -242,7 +261,6 @@ const cssText = `
   }
 
   function handleNavigationRefresh() {
-    setAskPanelVisible(Boolean(getPanelCloseButton()));
     ensureAskGeminiButton();
   }
 
