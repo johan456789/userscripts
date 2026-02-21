@@ -5,11 +5,11 @@
 // @grant        none
 // @run-at       document-end
 // @noframes
-// @version      0.1.0
+// @version      0.1.1
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
-// @updateURL    https://github.com/johan456789/userscripts/raw/main/youtube-notifications-filter.js
-// @downloadURL  https://github.com/johan456789/userscripts/raw/main/youtube-notifications-filter.js
+// @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-notifications-filter.js
+// @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-notifications-filter.js
 // ==/UserScript==
 
 const logger = Logger("[YT-notifications-filter]");
@@ -25,7 +25,9 @@ const SELECTORS = {
   notificationHeader: "#header ytd-simple-menu-header-renderer",
   notificationButtons: "#buttons.ytd-simple-menu-header-renderer",
   notificationItem: "ytd-notification-renderer",
-  notificationSection: "ytd-notification-section-renderer",
+  notificationSection: "yt-multi-page-menu-section-renderer",
+  notificationSectionTitle: "#section-title",
+  notificationSectionItems: "#items",
   chipButton: "button[data-filter-id]",
 };
 
@@ -105,18 +107,34 @@ let currentFilterId = "videos";
       item.style.display = filter.matches(type) ? "" : "none";
     });
 
-    const sections = Array.from(menu.querySelectorAll(SELECTORS.notificationSection));
-    sections.forEach((section) => {
-      const hasVisibleItems = Array.from(section.querySelectorAll(SELECTORS.notificationItem)).some(
-        (item) => item.style.display !== "none"
-      );
-      section.style.display = hasVisibleItems ? "" : "none";
+    const sectionStates = Array.from(menu.querySelectorAll(SELECTORS.notificationSection))
+      .map((section) => getSectionState(section))
+      .filter(Boolean);
+
+    const visibleSectionCount = sectionStates.filter((state) => state.hasVisibleItems).length;
+    sectionStates.forEach((state) => {
+      const shouldShowTitle = state.hasVisibleItems && visibleSectionCount > 1;
+      state.title.style.display = shouldShowTitle ? "" : "none";
     });
 
     const filterBar = menu.querySelector(`.${CLASSES.filterBar}`);
     if (filterBar) {
       updateChipStates(filterBar, currentFilterId);
     }
+  }
+
+  function getSectionState(section) {
+    const title = section.querySelector(SELECTORS.notificationSectionTitle);
+    const itemsContainer = section.querySelector(SELECTORS.notificationSectionItems);
+    if (!title || !itemsContainer) {
+      return null;
+    }
+
+    const hasVisibleItems = Array.from(itemsContainer.querySelectorAll(SELECTORS.notificationItem)).some(
+      (item) => item.style.display !== "none"
+    );
+
+    return { title, hasVisibleItems };
   }
 
   function createFilterBar(menu) {
