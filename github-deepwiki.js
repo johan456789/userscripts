@@ -2,17 +2,21 @@
 // @name                    Jump to DeepWiki from Github
 // @name:zh-CN              Github 跳转至 DeepWiki
 // @namespace               http://tampermonkey.net/
-// @version                 0.2.1
+// @version                 0.2.2
 // @description             Add an anchor to jump to DeepWiki from Github
 // @description:zh-CN       在 Github 页面添加一个链接，跳转至 DeepWiki
 // @match                   *://github.com/*
 // @include                 *://*github*/
+// @require                 https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @license                 MIT
 // @downloadURL             https://github.com/johan456789/userscripts/raw/refs/heads/main/github-deepwiki.js
 // @updateURL               https://github.com/johan456789/userscripts/raw/refs/heads/main/github-deepwiki.js
 // ==/UserScript==
 
 // originally from https://greasyfork.org/en/scripts/534147-jump-to-deepwiki-from-github
+
+const logger = Logger("[Github-DeepWiki]");
+const README_LINK_SELECTOR = 'a[href="#readme-ov-file"]';
 
 // 判断当前path是否是一个 github repo，且位于项目的主页面
 function isGithubRepo(path) {
@@ -26,15 +30,15 @@ function CreateUI() {
         return;
     }
 
-    const container = document.querySelector('div.Layout-sidebar div.BorderGrid-cell div.hide-sm');
-    if (!container) {
+    const readmeAnchor = document.querySelector(README_LINK_SELECTOR);
+    const readmeDiv = readmeAnchor?.closest('div.mt-2');
+    if (!readmeDiv) {
+        logger("Readme sidebar link not found for selector:", README_LINK_SELECTOR);
         return;
     }
-
-    const children = Array.from(container.querySelectorAll('div.mt-2'));
-    const readmeDiv = children.find(child => child.textContent.trim() === 'Readme');
-
-    if (!readmeDiv) {
+    const container = readmeDiv.parentElement;
+    if (!container) {
+        logger("Readme container parent not found.");
         return;
     }
 
@@ -79,8 +83,8 @@ function CreateUI() {
     svg.appendChild(path3);
 
     anchor.appendChild(svg);
-    // anchor.appendChild(document.createTextNode(' DeepWiki')); // must have a space to make it aligned. github is weird.
-    anchor.appendChild(document.createTextNode('DeepWiki')); // with refined github extension enabled, it's aligned.
+    anchor.appendChild(document.createTextNode(' DeepWiki')); // must have a space to make it aligned. github is weird.
+    // anchor.appendChild(document.createTextNode('DeepWiki')); // with refined github extension enabled, it's aligned. 2026-02-28 UPDATE: no longer true.
 
     const h3 = document.createElement('h3');
     h3.className = 'sr-only';
@@ -90,25 +94,28 @@ function CreateUI() {
     newElement.appendChild(h3);
 
     container.insertBefore(newElement, readmeDiv);
+    logger("Inserted DeepWiki link:", deepwikiUrl);
 }
 
 function checkAndCreateUI() {
     const path = window.location.pathname;
-    if (isGithubRepo(path)) {
-        CreateUI();
+    if (!isGithubRepo(path)) {
+        return;
     }
+    CreateUI();
 }
 
 (function () {
     "use strict";
+    logger("Script started.");
 
     // 初始检查
     checkAndCreateUI();
 
     // 监听页面变化
     const observer = new MutationObserver((mutations) => {
-        // 检查侧边栏容器是否存在
-        if (document.querySelector('div.Layout-sidebar div.BorderGrid-cell div.hide-sm')) {
+        // 检查 Readme 入口是否存在
+        if (document.querySelector(README_LINK_SELECTOR)) {
             checkAndCreateUI();
         }
     });
@@ -125,6 +132,7 @@ function checkAndCreateUI() {
         const url = location.href;
         if (url !== lastUrl) {
             lastUrl = url;
+            logger("URL changed, checking for DeepWiki link.");
             checkAndCreateUI();
         }
     }).observe(document, { subtree: true, childList: true });
