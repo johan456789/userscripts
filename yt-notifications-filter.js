@@ -5,7 +5,7 @@
 // @grant        none
 // @run-at       document-end
 // @noframes
-// @version      0.1.2
+// @version      0.1.3
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-notifications-filter.js
@@ -35,6 +35,7 @@ const SELECTORS = {
 const FILTERS = [
   { id: "videos", label: "Videos", matches: (type) => type === "videos" },
   { id: "shorts", label: "Shorts", matches: (type) => type === "shorts" },
+  { id: "others", label: "Others", matches: (type) => type === "unknown" },
 ];
 
 let currentFilterId = "videos";
@@ -109,11 +110,15 @@ let currentFilterId = "videos";
       item.style.display = filter.matches(type) ? "" : "none";
     });
 
-    const sectionStates = Array.from(menu.querySelectorAll(SELECTORS.notificationSection))
+    const sectionStates = Array.from(
+      menu.querySelectorAll(SELECTORS.notificationSection),
+    )
       .map((section) => getSectionState(section))
       .filter(Boolean);
 
-    const visibleSectionCount = sectionStates.filter((state) => state.hasVisibleItems).length;
+    const visibleSectionCount = sectionStates.filter(
+      (state) => state.hasVisibleItems,
+    ).length;
     sectionStates.forEach((state) => {
       const shouldShowTitle = state.hasVisibleItems && visibleSectionCount > 1;
       state.title.style.display = shouldShowTitle ? "" : "none";
@@ -127,14 +132,16 @@ let currentFilterId = "videos";
 
   function getSectionState(section) {
     const title = section.querySelector(SELECTORS.notificationSectionTitle);
-    const itemsContainer = section.querySelector(SELECTORS.notificationSectionItems);
+    const itemsContainer = section.querySelector(
+      SELECTORS.notificationSectionItems,
+    );
     if (!title || !itemsContainer) {
       return null;
     }
 
-    const hasVisibleItems = Array.from(itemsContainer.querySelectorAll(SELECTORS.notificationItem)).some(
-      (item) => item.style.display !== "none"
-    );
+    const hasVisibleItems = Array.from(
+      itemsContainer.querySelectorAll(SELECTORS.notificationItem),
+    ).some((item) => item.style.display !== "none");
 
     return { title, hasVisibleItems };
   }
@@ -163,7 +170,7 @@ let currentFilterId = "videos";
     const filterBar = document.createElement("chip-bar-view-model");
     filterBar.setAttribute(
       "class",
-      `ytChipBarViewModelHost style-scope ytd-item-section-renderer style-scope ytd-sort-filter-header-renderer ${CLASSES.filterBar}`
+      `ytChipBarViewModelHost style-scope ytd-item-section-renderer style-scope ytd-sort-filter-header-renderer ${CLASSES.filterBar}`,
     );
     filterBar.setAttribute("role", "tablist");
 
@@ -238,7 +245,9 @@ let currentFilterId = "videos";
   }
 
   function ensureFilters() {
-    const menus = Array.from(document.querySelectorAll(SELECTORS.notificationMenu));
+    const menus = Array.from(
+      document.querySelectorAll(SELECTORS.notificationMenu),
+    );
     menus.forEach((menu) => {
       ensureFilterBar(menu);
     });
