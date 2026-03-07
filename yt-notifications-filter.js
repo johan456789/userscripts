@@ -5,7 +5,7 @@
 // @grant        none
 // @run-at       document-end
 // @noframes
-// @version      0.1.3
+// @version      0.1.4
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-notifications-filter.js
@@ -39,6 +39,8 @@ const FILTERS = [
 ];
 
 let currentFilterId = "videos";
+const OBSERVER_DEBOUNCE_MS = 100;
+const OBSERVER_MAX_WAIT_MS = 500;
 
 (function () {
   "use strict";
@@ -253,7 +255,9 @@ let currentFilterId = "videos";
     });
   }
 
-  const debouncedEnsureFilters = debounce(ensureFilters, 100);
+  const debouncedEnsureFilters = debounce(ensureFilters, OBSERVER_DEBOUNCE_MS, {
+    maxWait: OBSERVER_MAX_WAIT_MS,
+  });
 
   function init() {
     ensureFilters();
