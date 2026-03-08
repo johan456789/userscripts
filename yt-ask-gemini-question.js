@@ -5,21 +5,29 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.5
+// @version      1.0.6
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
 // ==/UserScript==
 
 const IDS = { askGeminiButton: "ask-gemini-button" };
+const TOOLTIP_TEXT = {
+  enabled: "Ask Gemini",
+  disabled: "Ask Gemini not available",
+};
 const SELECTORS = {
   topButtons: "#top-row #actions #menu #top-level-buttons-computed",
-  geminiTrigger:
+  geminiTriggers: [
     "#items > yt-video-description-youchat-section-view-model > div.ytVideoDescriptionYouchatSectionViewModelPrimaryButton > button-view-model > button",
+    "#above-the-fold yt-video-description-youchat-section-view-model button-view-model > button",
+    "#above-the-fold yt-video-description-youchat-section-view-model button",
+  ],
   panelCloseTrigger:
     "#visibility-button > ytd-button-renderer > yt-button-shape > button",
   descriptionExpandTrigger: "#above-the-fold #expand",
   descriptionContainer: "#above-the-fold #description",
+  tooltipPopover: `#${IDS.askGeminiButton} .ask-gemini-tooltip-popover`,
 };
 const TAGS = { wrapper: "yt-button-view-model" };
 
@@ -34,9 +42,55 @@ const ytBtnClassList =
     .filter(Boolean);
 
 const cssText = `
+#${IDS.askGeminiButton} {
+  position: relative;
+}
+
 #${IDS.askGeminiButton} button.yt-spec-button-shape-next[disabled] {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+#${IDS.askGeminiButton} yt-tooltip {
+  pointer-events: none;
+}
+
+#${IDS.askGeminiButton} yt-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(15, 15, 15, 0.9);
+  color: #fff;
+  font-family: "YouTube Sans", "Roboto", sans-serif;
+  font-size: 1.2rem;
+  line-height: 1.6rem;
+  white-space: nowrap;
+  z-index: 2202;
+}
+
+#${IDS.askGeminiButton} .ask-gemini-tooltip {
+  pointer-events: none;
+}
+
+#${IDS.askGeminiButton} .ask-gemini-tooltip-popover {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgb(91, 91, 91);
+  color: #fff;
+  font-family: "YouTube Sans", "Roboto", sans-serif;
+  font-size: 1.2rem;
+  line-height: 1.6rem;
+  white-space: nowrap;
+  z-index: 2202;
 }
 `;
 
@@ -45,10 +99,6 @@ const cssText = `
 
   function isWatchPage() {
     return window.location.pathname === "/watch";
-  }
-
-  function getGeminiTargetButton() {
-    return document.querySelector(SELECTORS.geminiTrigger);
   }
 
   function getPanelCloseButton() {
@@ -95,9 +145,21 @@ const cssText = `
     return isElementInteractable(closeButton) ? closeButton : null;
   }
 
+  function getFirstInteractableMatch(selectors) {
+    for (const selector of selectors) {
+      const candidates = document.querySelectorAll(selector);
+      for (const candidate of candidates) {
+        if (isElementInteractable(candidate)) {
+          return candidate;
+        }
+      }
+    }
+
+    return null;
+  }
+
   function getActiveGeminiButton() {
-    const geminiButton = getGeminiTargetButton();
-    return isElementInteractable(geminiButton) ? geminiButton : null;
+    return getFirstInteractableMatch(SELECTORS.geminiTriggers);
   }
 
   function tryExpandDescription() {
@@ -121,16 +183,44 @@ const cssText = `
     return true;
   }
 
+  function getAskGeminiTooltipText(button) {
+    return button.disabled ? TOOLTIP_TEXT.disabled : TOOLTIP_TEXT.enabled;
+  }
+
+  function syncTooltipState(button, tooltipPopover) {
+    const tooltipText = getAskGeminiTooltipText(button);
+    if (button.getAttribute("aria-label") !== tooltipText) {
+      button.setAttribute("aria-label", tooltipText);
+    }
+    if (tooltipPopover.textContent !== tooltipText) {
+      tooltipPopover.textContent = tooltipText;
+    }
+  }
+
+  function showTooltip(tooltip, tooltipPopover) {
+    tooltip.setAttribute("aria-hidden", "false");
+    tooltipPopover.hidden = false;
+  }
+
+  function hideTooltip(tooltip, tooltipPopover) {
+    tooltip.setAttribute("aria-hidden", "true");
+    tooltipPopover.hidden = true;
+  }
+
   function updateAskGeminiButtonState() {
     const askButton = document.querySelector(`#${IDS.askGeminiButton} button`);
     if (!askButton) {
       return;
     }
+    const tooltipPopover = document.querySelector(SELECTORS.tooltipPopover);
 
     const closeButton = getActiveCloseButton();
     const currentTarget = closeButton || getActiveGeminiButton();
     askButton.dataset.askPanelVisible = String(Boolean(closeButton));
     askButton.toggleAttribute("disabled", !currentTarget);
+    if (tooltipPopover) {
+      syncTooltipState(askButton, tooltipPopover);
+    }
 
     if (!currentTarget && tryExpandDescription()) {
       setTimeout(updateAskGeminiButtonState, 150);
@@ -205,6 +295,21 @@ const cssText = `
     return touchFeedback;
   }
 
+  function createTooltip() {
+    const tooltip = document.createElement("div");
+    tooltip.className = "ask-gemini-tooltip";
+    tooltip.setAttribute("aria-hidden", "true");
+
+    const tooltipPopover = document.createElement("div");
+    tooltipPopover.className = "ask-gemini-tooltip-popover";
+    tooltipPopover.textContent = "Ask Gemini about the video";
+    tooltipPopover.hidden = true;
+
+    tooltip.appendChild(tooltipPopover);
+
+    return tooltip;
+  }
+
   function buildAskGeminiButton() {
     const outerContainer = document.createElement("div");
     outerContainer.id = IDS.askGeminiButton;
@@ -219,6 +324,37 @@ const cssText = `
 
     const button = document.createElement("button");
     button.classList.add(...ytBtnClassList);
+    const tooltip = createTooltip();
+    const tooltipPopover = tooltip.querySelector(".ask-gemini-tooltip-popover");
+    if (tooltipPopover) {
+      syncTooltipState(button, tooltipPopover);
+    }
+
+    outerContainer.addEventListener("mouseenter", () => {
+      logger("tooltip mouseenter");
+      if (tooltipPopover) {
+        showTooltip(tooltip, tooltipPopover);
+      }
+    });
+    outerContainer.addEventListener("mouseleave", () => {
+      logger("tooltip mouseleave");
+      if (tooltipPopover) {
+        hideTooltip(tooltip, tooltipPopover);
+      }
+    });
+    button.addEventListener("focus", () => {
+      logger("tooltip focus");
+      if (tooltipPopover) {
+        showTooltip(tooltip, tooltipPopover);
+      }
+    });
+    button.addEventListener("blur", () => {
+      logger("tooltip blur");
+      if (tooltipPopover) {
+        hideTooltip(tooltip, tooltipPopover);
+      }
+    });
+
     button.addEventListener("click", () => {
       const closeButton = getActiveCloseButton();
       if (closeButton) {
@@ -263,6 +399,7 @@ const cssText = `
 
     container.appendChild(button);
     outerContainer.appendChild(container);
+    outerContainer.appendChild(tooltip);
 
     const wrapper = document.createElement(TAGS.wrapper);
     wrapper.classList.add("ytd-menu-renderer");
