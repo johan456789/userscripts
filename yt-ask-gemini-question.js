@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.6
+// @version      1.0.7
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -48,7 +48,11 @@ const cssText = `
 
 #${IDS.askGeminiButton} button.yt-spec-button-shape-next[disabled] {
   opacity: 0.5;
-  cursor: not-allowed;
+  cursor: default !important;
+}
+
+#${IDS.askGeminiButton} button.yt-spec-button-shape-next:not([disabled]) {
+  cursor: pointer;
 }
 
 #${IDS.askGeminiButton} yt-tooltip {

@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.5
+// @version      2.3.6
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -37,7 +37,11 @@ yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-fil
 const cssText = `
 #${IDS.transcriptButton} button.yt-spec-button-shape-next[disabled] {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: default !important;
+}
+
+#${IDS.transcriptButton} button.yt-spec-button-shape-next:not([disabled]) {
+    cursor: pointer;
 }
 
 /* Center icon within YouTube button text container */
