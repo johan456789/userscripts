@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.4
+// @version      1.0.5
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -18,6 +18,7 @@ const SELECTORS = {
     "#items > yt-video-description-youchat-section-view-model > div.ytVideoDescriptionYouchatSectionViewModelPrimaryButton > button-view-model > button",
   panelCloseTrigger:
     "#visibility-button > ytd-button-renderer > yt-button-shape > button",
+  descriptionExpandTrigger: "#above-the-fold #expand",
   descriptionContainer: "#above-the-fold #description",
 };
 const TAGS = { wrapper: "yt-button-view-model" };
@@ -56,6 +57,10 @@ const cssText = `
 
   function getDescriptionContainer() {
     return document.querySelector(SELECTORS.descriptionContainer);
+  }
+
+  function getDescriptionExpandButton() {
+    return document.querySelector(SELECTORS.descriptionExpandTrigger);
   }
 
   function isElementInteractable(element) {
@@ -105,14 +110,14 @@ const cssText = `
       return false;
     }
 
-    const descriptionContainer = getDescriptionContainer();
-    if (!isElementInteractable(descriptionContainer)) {
+    const expandButton = getDescriptionExpandButton();
+    if (!isElementInteractable(expandButton)) {
       return false;
     }
 
-    descriptionContainer.click();
+    expandButton.click();
     lastDescriptionExpandAttemptMs = now;
-    logger("Clicked #description to expand section");
+    logger("Clicked #expand to expand description");
     return true;
   }
 
