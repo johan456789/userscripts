@@ -6,7 +6,8 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.6
+// @version      2.3.7
+// @require      https://github.com/johan456789/userscripts/raw/main/utils/yt-action-button.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
 // @downloadURL  https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -14,6 +15,11 @@
 
 // ---- Constants (reused across multiple places) ----
 const IDS = { transcriptButton: "transcript-button" };
+const TOOLTIP_TEXT = {
+  ready: "Copy transcript",
+  loading: "Loading transcript",
+  unavailable: "Transcript not available",
+};
 const SELECTORS = {
   topButtons: "#top-row #actions #menu #top-level-buttons-computed",
 };
@@ -27,23 +33,9 @@ const logger = Logger("[YT-transcript]");
 
 logger("Userscript started.");
 let transcriptCache = new Map();
-
-const ytBtnClassList =
-  `yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono \
-yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-filter-experiment`
-    .split(" ")
-    .filter(Boolean);
+let transcriptButtonComponent = null;
 
 const cssText = `
-#${IDS.transcriptButton} button.yt-spec-button-shape-next[disabled] {
-    opacity: 0.5;
-    cursor: default !important;
-}
-
-#${IDS.transcriptButton} button.yt-spec-button-shape-next:not([disabled]) {
-    cursor: pointer;
-}
-
 /* Center icon within YouTube button text container */
 #${IDS.transcriptButton} .yt-spec-button-shape-next__button-text-content {
     display: inline-flex;
@@ -84,12 +76,27 @@ const cssText = `
     return "";
   }
 
-  function updateButtonAppearance(button, availability) {
+  function getTranscriptTooltipText(button) {
+    switch (button.dataset.transcriptState) {
+      case "ready":
+        return TOOLTIP_TEXT.ready;
+      case "unavailable":
+        return TOOLTIP_TEXT.unavailable;
+      default:
+        return TOOLTIP_TEXT.loading;
+    }
+  }
+
+  function updateButtonAppearance(buttonComponent, availability) {
+    const button = buttonComponent?.button || buttonComponent;
+    const buttonTextDiv =
+      buttonComponent?.contentRefs?.buttonTextDiv ||
+      button?.querySelector(`.${CLASSES.buttonTextContent}`);
+
     if (!button) {
       logger.error("Button is null/undefined");
       return;
     }
-    const buttonTextDiv = button.querySelector(`.${CLASSES.buttonTextContent}`);
     if (!buttonTextDiv) {
       logger.error("Button text container not found");
       return;
@@ -97,13 +104,23 @@ const cssText = `
 
     // availability: true (available), false (unavailable), null (loading)
     if (availability === null) {
-      button.disabled = true;
+      button.dataset.transcriptState = "loading";
+      if (buttonComponent?.setDisabled) {
+        buttonComponent.setDisabled(true);
+      } else {
+        button.disabled = true;
+      }
       buttonTextDiv.textContent = "...";
       return;
     }
 
     const isAvailable = Boolean(availability);
-    button.toggleAttribute("disabled", !isAvailable);
+    button.dataset.transcriptState = isAvailable ? "ready" : "unavailable";
+    if (buttonComponent?.setDisabled) {
+      buttonComponent.setDisabled(!isAvailable);
+    } else {
+      button.toggleAttribute("disabled", !isAvailable);
+    }
     buttonTextDiv.replaceChildren(createCopySvgIcon());
   }
 
@@ -260,41 +277,6 @@ const cssText = `
       return null;
     }
 
-    const outerContainer = document.createElement("div");
-    outerContainer.id = IDS.transcriptButton;
-    outerContainer.classList.add(
-      "style-scope",
-      "ytd-video-owner-renderer",
-      "copy-panel"
-    );
-
-    const container = document.createElement("div");
-    container.classList.add("copy-button-container");
-
-    const button = document.createElement("button");
-    button.classList.add(...ytBtnClassList);
-    button.disabled = true;
-
-    const buttonTextDiv = document.createElement("div");
-    buttonTextDiv.classList.add(CLASSES.buttonTextContent);
-    button.appendChild(buttonTextDiv);
-    // initialize as loading state
-    updateButtonAppearance(button, null);
-
-    const touchFeedback = document.createElement("yt-touch-feedback-shape");
-    touchFeedback.style.borderRadius = "inherit";
-    const feedbackContainer = document.createElement("div");
-    feedbackContainer.className =
-      "yt-spec-touch-feedback-shape yt-spec-touch-feedback-shape--touch-response";
-    const stroke = document.createElement("div");
-    stroke.className = "yt-spec-touch-feedback-shape__stroke";
-    const fill = document.createElement("div");
-    fill.className = "yt-spec-touch-feedback-shape__fill";
-    feedbackContainer.appendChild(stroke);
-    feedbackContainer.appendChild(fill);
-    touchFeedback.appendChild(feedbackContainer);
-    button.appendChild(touchFeedback);
-
     const btnClickHandler = async () => {
       // copy transcript to clipboard
       const videoId = getVideoId();
@@ -304,6 +286,11 @@ const cssText = `
         return;
       }
       const transcript = transcriptCache.get(videoId);
+      const buttonTextDiv = transcriptButtonComponent?.contentRefs?.buttonTextDiv;
+      if (!buttonTextDiv) {
+        logger.error("Button text container not found");
+        return;
+      }
       try {
         GM_setClipboard(transcript);
         logger("Transcript copied to clipboard using GM_setClipboard!");
@@ -319,14 +306,21 @@ const cssText = `
         );
       }
     };
-    button.addEventListener("click", btnClickHandler);
-    container.appendChild(button);
-    outerContainer.appendChild(container);
-
-    // Outer wrapper element per YouTube's structure
-    const wrapper = document.createElement(TAGS.wrapper);
-    wrapper.classList.add("ytd-menu-renderer");
-    wrapper.appendChild(outerContainer);
+    transcriptButtonComponent = ytActionButton.create({
+      id: IDS.transcriptButton,
+      getTooltipText: getTranscriptTooltipText,
+      onClick: btnClickHandler,
+      initialDisabled: true,
+      buildButtonContent(button, { createTouchFeedback }) {
+        const buttonTextDiv = document.createElement("div");
+        buttonTextDiv.classList.add(CLASSES.buttonTextContent);
+        button.appendChild(buttonTextDiv);
+        button.appendChild(createTouchFeedback());
+        return { buttonTextDiv };
+      },
+    });
+    updateButtonAppearance(transcriptButtonComponent, null);
+    const { wrapper, button } = transcriptButtonComponent;
 
     // Insert after the last yt-button-view-model within #top-level-buttons-computed
     let insertAfter = null;
@@ -361,7 +355,7 @@ const cssText = `
       const alreadyExists = document.getElementById(IDS.transcriptButton);
       if (topButtons && !alreadyExists) {
         observer.disconnect();
-        const button = addTranscriptButton();
+        addTranscriptButton();
 
         const pageRefreshHandler = async () => {
           const videoId = getVideoId();
@@ -369,7 +363,7 @@ const cssText = `
             `updating transcript (in cache: ${transcriptCache.has(videoId)})`
           );
           // Set loading state while checking availability
-          updateButtonAppearance(button, null);
+          updateButtonAppearance(transcriptButtonComponent, null);
           let fullTranscript;
           if (!transcriptCache.has(videoId)) {
             fullTranscript = await prefetchTranscript(videoId);
@@ -383,7 +377,7 @@ const cssText = `
             logger("pageRefreshHandler: transcript already cached");
           }
           const isAvailable = transcriptCache.has(videoId);
-          updateButtonAppearance(button, isAvailable);
+          updateButtonAppearance(transcriptButtonComponent, isAvailable);
           logger("pageRefreshHandler: finished updating transcript");
         };
         await pageRefreshHandler();
