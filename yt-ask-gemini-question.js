@@ -16,6 +16,10 @@ const TOOLTIP_TEXT = {
   enabled: "Ask Gemini",
   disabled: "Ask Gemini not available",
 };
+const CLASSES = {
+  tooltip: "ask-gemini-tooltip",
+  tooltipPopover: "ask-gemini-tooltip-popover",
+};
 const SELECTORS = {
   topButtons: "#top-row #actions #menu #top-level-buttons-computed",
   geminiTriggers: [
@@ -27,7 +31,6 @@ const SELECTORS = {
     "#visibility-button > ytd-button-renderer > yt-button-shape > button",
   descriptionExpandTrigger: "#above-the-fold #expand",
   descriptionContainer: "#above-the-fold #description",
-  tooltipPopover: `#${IDS.askGeminiButton} .ask-gemini-tooltip-popover`,
 };
 const TAGS = { wrapper: "yt-button-view-model" };
 
@@ -55,32 +58,11 @@ const cssText = `
   cursor: pointer;
 }
 
-#${IDS.askGeminiButton} yt-tooltip {
+#${IDS.askGeminiButton} .${CLASSES.tooltip} {
   pointer-events: none;
 }
 
-#${IDS.askGeminiButton} yt-popover {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(15, 15, 15, 0.9);
-  color: #fff;
-  font-family: "YouTube Sans", "Roboto", sans-serif;
-  font-size: 1.2rem;
-  line-height: 1.6rem;
-  white-space: nowrap;
-  z-index: 2202;
-}
-
-#${IDS.askGeminiButton} .ask-gemini-tooltip {
-  pointer-events: none;
-}
-
-#${IDS.askGeminiButton} .ask-gemini-tooltip-popover {
+#${IDS.askGeminiButton} .${CLASSES.tooltipPopover} {
   position: absolute;
   left: 50%;
   top: calc(100% + 8px);
@@ -166,6 +148,18 @@ const cssText = `
     return getFirstInteractableMatch(SELECTORS.geminiTriggers);
   }
 
+  function getAskGeminiButtonElements() {
+    const container = document.getElementById(IDS.askGeminiButton);
+    if (!container) {
+      return { button: null, tooltipPopover: null };
+    }
+
+    return {
+      button: container.querySelector("button"),
+      tooltipPopover: container.querySelector(`.${CLASSES.tooltipPopover}`),
+    };
+  }
+
   function tryExpandDescription() {
     if (getActiveCloseButton() || getActiveGeminiButton()) {
       return false;
@@ -191,8 +185,8 @@ const cssText = `
     return button.disabled ? TOOLTIP_TEXT.disabled : TOOLTIP_TEXT.enabled;
   }
 
-  function syncTooltipState(button, tooltipPopover) {
-    const tooltipText = getAskGeminiTooltipText(button);
+  function syncTooltipState(button, tooltipPopover, getTooltipText) {
+    const tooltipText = getTooltipText(button);
     if (button.getAttribute("aria-label") !== tooltipText) {
       button.setAttribute("aria-label", tooltipText);
     }
@@ -211,24 +205,59 @@ const cssText = `
     tooltipPopover.hidden = true;
   }
 
-  function updateAskGeminiButtonState() {
-    const askButton = document.querySelector(`#${IDS.askGeminiButton} button`);
-    if (!askButton) {
+  function attachTooltipBehavior(outerContainer, button, tooltip, tooltipPopover) {
+    if (!tooltipPopover) {
       return;
     }
-    const tooltipPopover = document.querySelector(SELECTORS.tooltipPopover);
 
-    const closeButton = getActiveCloseButton();
-    const currentTarget = closeButton || getActiveGeminiButton();
-    askButton.dataset.askPanelVisible = String(Boolean(closeButton));
-    askButton.toggleAttribute("disabled", !currentTarget);
-    if (tooltipPopover) {
-      syncTooltipState(askButton, tooltipPopover);
-    }
+    outerContainer.addEventListener("mouseenter", () => {
+      showTooltip(tooltip, tooltipPopover);
+    });
+    outerContainer.addEventListener("mouseleave", () => {
+      hideTooltip(tooltip, tooltipPopover);
+    });
+    button.addEventListener("focus", () => {
+      showTooltip(tooltip, tooltipPopover);
+    });
+    button.addEventListener("blur", () => {
+      hideTooltip(tooltip, tooltipPopover);
+    });
+  }
 
-    if (!currentTarget && tryExpandDescription()) {
-      setTimeout(updateAskGeminiButtonState, 150);
-    }
+  function createTooltip(initialText) {
+    const tooltip = document.createElement("div");
+    tooltip.className = CLASSES.tooltip;
+    tooltip.setAttribute("aria-hidden", "true");
+
+    const tooltipPopover = document.createElement("div");
+    tooltipPopover.className = CLASSES.tooltipPopover;
+    tooltipPopover.textContent = initialText;
+    tooltipPopover.hidden = true;
+
+    tooltip.appendChild(tooltipPopover);
+
+    return { tooltip, tooltipPopover };
+  }
+
+  function createTouchFeedback() {
+    const touchFeedback = document.createElement("yt-touch-feedback-shape");
+    touchFeedback.style.borderRadius = "inherit";
+
+    const feedbackContainer = document.createElement("div");
+    feedbackContainer.className =
+      "yt-spec-touch-feedback-shape yt-spec-touch-feedback-shape--touch-response";
+
+    const stroke = document.createElement("div");
+    stroke.className = "yt-spec-touch-feedback-shape__stroke";
+
+    const fill = document.createElement("div");
+    fill.className = "yt-spec-touch-feedback-shape__fill";
+
+    feedbackContainer.appendChild(stroke);
+    feedbackContainer.appendChild(fill);
+    touchFeedback.appendChild(feedbackContainer);
+
+    return touchFeedback;
   }
 
   function createAskGeminiIcon() {
@@ -278,45 +307,14 @@ const cssText = `
     return icon;
   }
 
-  function createTouchFeedback() {
-    const touchFeedback = document.createElement("yt-touch-feedback-shape");
-    touchFeedback.style.borderRadius = "inherit";
-
-    const feedbackContainer = document.createElement("div");
-    feedbackContainer.className =
-      "yt-spec-touch-feedback-shape yt-spec-touch-feedback-shape--touch-response";
-
-    const stroke = document.createElement("div");
-    stroke.className = "yt-spec-touch-feedback-shape__stroke";
-
-    const fill = document.createElement("div");
-    fill.className = "yt-spec-touch-feedback-shape__fill";
-
-    feedbackContainer.appendChild(stroke);
-    feedbackContainer.appendChild(fill);
-    touchFeedback.appendChild(feedbackContainer);
-
-    return touchFeedback;
-  }
-
-  function createTooltip() {
-    const tooltip = document.createElement("div");
-    tooltip.className = "ask-gemini-tooltip";
-    tooltip.setAttribute("aria-hidden", "true");
-
-    const tooltipPopover = document.createElement("div");
-    tooltipPopover.className = "ask-gemini-tooltip-popover";
-    tooltipPopover.textContent = "Ask Gemini about the video";
-    tooltipPopover.hidden = true;
-
-    tooltip.appendChild(tooltipPopover);
-
-    return tooltip;
-  }
-
-  function buildAskGeminiButton() {
+  function createActionButton({
+    id,
+    createIcon,
+    getTooltipText,
+    onClick,
+  }) {
     const outerContainer = document.createElement("div");
-    outerContainer.id = IDS.askGeminiButton;
+    outerContainer.id = id;
     outerContainer.classList.add(
       "style-scope",
       "ytd-video-owner-renderer",
@@ -328,78 +326,14 @@ const cssText = `
 
     const button = document.createElement("button");
     button.classList.add(...ytBtnClassList);
-    const tooltip = createTooltip();
-    const tooltipPopover = tooltip.querySelector(".ask-gemini-tooltip-popover");
-    if (tooltipPopover) {
-      syncTooltipState(button, tooltipPopover);
-    }
+    const { tooltip, tooltipPopover } = createTooltip(getTooltipText(button));
+    syncTooltipState(button, tooltipPopover, getTooltipText);
+    attachTooltipBehavior(outerContainer, button, tooltip, tooltipPopover);
 
-    outerContainer.addEventListener("mouseenter", () => {
-      logger("tooltip mouseenter");
-      if (tooltipPopover) {
-        showTooltip(tooltip, tooltipPopover);
-      }
-    });
-    outerContainer.addEventListener("mouseleave", () => {
-      logger("tooltip mouseleave");
-      if (tooltipPopover) {
-        hideTooltip(tooltip, tooltipPopover);
-      }
-    });
-    button.addEventListener("focus", () => {
-      logger("tooltip focus");
-      if (tooltipPopover) {
-        showTooltip(tooltip, tooltipPopover);
-      }
-    });
-    button.addEventListener("blur", () => {
-      logger("tooltip blur");
-      if (tooltipPopover) {
-        hideTooltip(tooltip, tooltipPopover);
-      }
-    });
-
-    button.addEventListener("click", () => {
-      const closeButton = getActiveCloseButton();
-      if (closeButton) {
-        closeButton.click();
-        logger("Clicked panel close button (panel hidden)");
-        setTimeout(updateAskGeminiButtonState, 100);
-        return;
-      }
-
-      const geminiButton = getActiveGeminiButton();
-      if (!geminiButton) {
-        if (tryExpandDescription()) {
-          logger("Expanded description, retrying Gemini open");
-          setTimeout(() => {
-            const retryGeminiButton = getActiveGeminiButton();
-            if (!retryGeminiButton) {
-              logger("Gemini target button not available after expand");
-              updateAskGeminiButtonState();
-              return;
-            }
-            retryGeminiButton.click();
-            logger(
-              "Clicked Gemini target button after expanding description (panel visible)"
-            );
-            setTimeout(updateAskGeminiButtonState, 100);
-          }, 150);
-          return;
-        }
-
-        logger("Gemini target button not available");
-        updateAskGeminiButtonState();
-        return;
-      }
-
-      geminiButton.click();
-      logger("Clicked Gemini target button (panel visible)");
-      setTimeout(updateAskGeminiButtonState, 100);
-    });
+    button.addEventListener("click", onClick);
 
     button.appendChild(createTouchFeedback());
-    button.appendChild(createAskGeminiIcon());
+    button.appendChild(createIcon());
 
     container.appendChild(button);
     outerContainer.appendChild(container);
@@ -410,6 +344,73 @@ const cssText = `
     wrapper.appendChild(outerContainer);
 
     return { wrapper, button };
+  }
+
+  function handleAskGeminiButtonClick() {
+    const closeButton = getActiveCloseButton();
+    if (closeButton) {
+      closeButton.click();
+      logger("Clicked panel close button (panel hidden)");
+      setTimeout(updateAskGeminiButtonState, 100);
+      return;
+    }
+
+    const geminiButton = getActiveGeminiButton();
+    if (!geminiButton) {
+      if (tryExpandDescription()) {
+        logger("Expanded description, retrying Gemini open");
+        setTimeout(() => {
+          const retryGeminiButton = getActiveGeminiButton();
+          if (!retryGeminiButton) {
+            logger("Gemini target button not available after expand");
+            updateAskGeminiButtonState();
+            return;
+          }
+          retryGeminiButton.click();
+          logger(
+            "Clicked Gemini target button after expanding description (panel visible)"
+          );
+          setTimeout(updateAskGeminiButtonState, 100);
+        }, 150);
+        return;
+      }
+
+      logger("Gemini target button not available");
+      updateAskGeminiButtonState();
+      return;
+    }
+
+    geminiButton.click();
+    logger("Clicked Gemini target button (panel visible)");
+    setTimeout(updateAskGeminiButtonState, 100);
+  }
+
+  function updateAskGeminiButtonState() {
+    const { button: askButton, tooltipPopover } = getAskGeminiButtonElements();
+    if (!askButton) {
+      return;
+    }
+
+    const closeButton = getActiveCloseButton();
+    const currentTarget = closeButton || getActiveGeminiButton();
+    askButton.dataset.askPanelVisible = String(Boolean(closeButton));
+    askButton.toggleAttribute("disabled", !currentTarget);
+    if (tooltipPopover) {
+      syncTooltipState(askButton, tooltipPopover, getAskGeminiTooltipText);
+    }
+
+    if (!currentTarget && tryExpandDescription()) {
+      setTimeout(updateAskGeminiButtonState, 150);
+    }
+  }
+
+  function buildAskGeminiButton() {
+    return createActionButton({
+      id: IDS.askGeminiButton,
+      createIcon: createAskGeminiIcon,
+      getTooltipText: getAskGeminiTooltipText,
+      onClick: handleAskGeminiButtonClick,
+    });
   }
 
   function addAskGeminiButton() {
