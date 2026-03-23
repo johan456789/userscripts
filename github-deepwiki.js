@@ -2,7 +2,7 @@
 // @name                    Jump to DeepWiki from Github
 // @name:zh-CN              Github 跳转至 DeepWiki
 // @namespace               http://tampermonkey.net/
-// @version                 0.2.2
+// @version                 0.2.3
 // @description             Add an anchor to jump to DeepWiki from Github
 // @description:zh-CN       在 Github 页面添加一个链接，跳转至 DeepWiki
 // @match                   *://github.com/*
@@ -16,48 +16,45 @@
 // originally from https://greasyfork.org/en/scripts/534147-jump-to-deepwiki-from-github
 
 const logger = Logger("[Github-DeepWiki]");
-const README_LINK_SELECTOR = 'a[href="#readme-ov-file"]';
+const DESKTOP_README_LINK_SELECTOR = '.hide-sm.hide-md a[href="#readme-ov-file"]';
+const MOBILE_META_CONTAINER_SELECTOR = '#responsive-meta-container .d-block.d-md-none.mb-2';
+
+const labelText = ' DeepWiki'; // must have a space to make it aligned. github is weird.
+// const labelText = 'DeepWiki'; // with refined github extension enabled, it's aligned. 2026-02-28 UPDATE: no longer true.
+
+const PLACEMENTS = [
+    {
+        existingSelector: '.deepwiki-anchor-desktop',
+        observerSelector: DESKTOP_README_LINK_SELECTOR,
+        getInsertionPoint: getDesktopInsertionPoint,
+        wrapperClassName: 'mt-2 deepwiki-anchor deepwiki-anchor-desktop',
+        anchorClassName: 'Link--muted',
+        iconClassName: 'mr-2 size-4 transform transition-transform duration-700 group-hover:rotate-180 [&_path]:stroke-0',
+        text: labelText,
+        logMessage: 'Inserted desktop DeepWiki link:'
+    },
+    {
+        existingSelector: '.deepwiki-anchor-mobile',
+        observerSelector: MOBILE_META_CONTAINER_SELECTOR,
+        getInsertionPoint: getMobileInsertionPoint,
+        wrapperClassName: 'mb-2 deepwiki-anchor deepwiki-anchor-mobile',
+        anchorClassName: 'Link--muted',
+        iconClassName: 'octicon mr-1 mr-sm-1 mr-md-2 mr-lg-2',
+        text: labelText,
+        logMessage: 'Inserted mobile DeepWiki link before license:'
+    }
+];
 
 // 判断当前path是否是一个 github repo，且位于项目的主页面
 function isGithubRepo(path) {
-    path = path.slice(0, -1);
-    return (path.split('/').length === 3);
+    const normalizedPath = path.replace(/\/$/, '');
+    return (normalizedPath.split('/').length === 3);
 }
 
-function CreateUI() {
-    // 如果链接已经存在，则不再创建
-    if (document.querySelector('.deepwiki-anchor')) {
-        return;
-    }
-
-    const readmeAnchor = document.querySelector(README_LINK_SELECTOR);
-    const readmeDiv = readmeAnchor?.closest('div.mt-2');
-    if (!readmeDiv) {
-        logger("Readme sidebar link not found for selector:", README_LINK_SELECTOR);
-        return;
-    }
-    const container = readmeDiv.parentElement;
-    if (!container) {
-        logger("Readme container parent not found.");
-        return;
-    }
-
-    const path = window.location.pathname;
-    const deepwikiUrl = `https://deepwiki.com${path}`;
-
-    const newElement = document.createElement('div');
-    newElement.className = 'mt-2 deepwiki-anchor';
-
-    const anchor = document.createElement('a');
-    anchor.className = 'Link--muted';
-    anchor.href = deepwikiUrl;
-    anchor.target = '_blank';
-    anchor.rel = 'noopener noreferrer';
-
+function createDeepWikiIcon() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
-    svg.setAttribute('class', 'mr-2 size-4 transform transition-transform duration-700 group-hover:rotate-180 [&_path]:stroke-0');
     svg.setAttribute('viewBox', '110 110 460 500');
     svg.setAttribute('width', '16');
     svg.setAttribute('height', '16');
@@ -77,24 +74,89 @@ function CreateUI() {
     path3.setAttribute('style', 'fill:currentColor');
     path3.setAttribute('d', 'M396.88,484.35l-50.97-29.43c-.08-.04-.17-.06-.24-.1-.8-.44-1.64-.79-2.51-1.03-.14-.04-.27-.06-.41-.09-.81-.19-1.64-.3-2.47-.32-.13,0-.26-.02-.39-.02-.89,0-1.78.13-2.66.35-.18.04-.36.1-.54.15-.88.26-1.76.59-2.58,1.07l-25.49,14.72c-9.84,5.68-22.06,5.68-31.9,0-9.84-5.68-15.96-16.27-15.96-27.63v-29.43c0-.95-.15-1.87-.37-2.76-.05-.19-.09-.37-.14-.56-.25-.86-.59-1.69-1.03-2.47-.07-.12-.15-.22-.22-.34-.43-.71-.94-1.37-1.51-1.97-.1-.1-.18-.21-.28-.31-.65-.63-1.37-1.18-2.15-1.66-.07-.04-.13-.11-.2-.16l-50.97-29.43c-3.65-2.11-8.15-2.11-11.81,0l-50.97,29.43c-3.65,2.11-5.9,6.01-5.9,10.22v58.86c0,4.22,2.25,8.11,5.9,10.22l50.97,29.43c.08.04.17.06.25.1.8.44,1.63.79,2.5,1.03.14.04.29.06.43.09.8.19,1.61.3,2.43.32.1,0,.2.04.3.04.04,0,.09-.02.13-.02.88,0,1.77-.13,2.64-.34.19-.04.37-.1.56-.16.88-.26,1.75-.59,2.57-1.06l25.49-14.71c9.84-5.68,22.06-5.68,31.91,0,9.84,5.68,15.95,16.27,15.95,27.63v29.43c0,.95.15,1.87.37,2.76.05.19.09.37.14.56.25.86.59,1.69,1.03,2.47.07.12.15.22.22.34.43.71.94,1.37,1.51,1.97.1.1.18.21.28.31.65.63,1.37,1.18,2.15,1.66.07.04.13.11.2.16l50.97,29.43c1.83,1.05,3.86,1.58,5.9,1.58s4.08-.53,5.9-1.58l50.97-29.43c3.65-2.11,5.9-6.01,5.9-10.22v-58.86c0-4.22-2.25-8.11-5.9-10.22Z');
 
-    // Append paths to SVG
     svg.appendChild(path1);
     svg.appendChild(path2);
     svg.appendChild(path3);
 
+    return svg;
+}
+
+function renderPlacementLink(placement, href) {
+    const anchor = document.createElement('a');
+    anchor.className = placement.anchorClassName;
+    anchor.href = href;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+
+    const svg = createDeepWikiIcon();
+    svg.setAttribute('class', placement.iconClassName);
+
     anchor.appendChild(svg);
-    anchor.appendChild(document.createTextNode(' DeepWiki')); // must have a space to make it aligned. github is weird.
-    // anchor.appendChild(document.createTextNode('DeepWiki')); // with refined github extension enabled, it's aligned. 2026-02-28 UPDATE: no longer true.
+    anchor.appendChild(document.createTextNode(placement.text));
 
-    const h3 = document.createElement('h3');
-    h3.className = 'sr-only';
-    h3.textContent = 'Readme';
+    const wrapper = document.createElement('div');
+    wrapper.className = placement.wrapperClassName;
+    wrapper.appendChild(anchor);
 
-    newElement.appendChild(anchor);
-    newElement.appendChild(h3);
+    return wrapper;
+}
 
-    container.insertBefore(newElement, readmeDiv);
-    logger("Inserted DeepWiki link:", deepwikiUrl);
+function getDesktopInsertionPoint() {
+    const readmeAnchor = document.querySelector(DESKTOP_README_LINK_SELECTOR);
+    const readmeDiv = readmeAnchor?.closest('div.mt-2');
+    if (!readmeDiv) {
+        logger("Desktop Readme sidebar link not found for selector:", DESKTOP_README_LINK_SELECTOR);
+        return null;
+    }
+    const container = readmeDiv.parentElement;
+    if (!container) {
+        logger("Desktop Readme container parent not found.");
+        return null;
+    }
+
+    return { parent: container, before: readmeDiv };
+}
+
+function getMobileInsertionPoint() {
+    const mobileMetaContainer = document.querySelector(MOBILE_META_CONTAINER_SELECTOR);
+    if (!mobileMetaContainer) {
+        logger("Mobile meta container not found for selector:", MOBILE_META_CONTAINER_SELECTOR);
+        return null;
+    }
+
+    const mobileChildren = Array.from(mobileMetaContainer.children);
+    const licenseHeading = mobileChildren.find((element) => {
+        return element.matches('h3.sr-only') && element.textContent?.trim() === 'License';
+    });
+    const licenseBlock = licenseHeading?.nextElementSibling?.matches('div.mb-2')
+        ? licenseHeading.nextElementSibling
+        : mobileChildren.find((element) => {
+            return element.matches('div.mb-2') &&
+                element.querySelector('a.Link--muted[href*="/LICENSE"], a.Link--muted[href*="license"]');
+        });
+
+    if (!licenseBlock) {
+        logger("Mobile license block not found.");
+        return null;
+    }
+
+    return { parent: mobileMetaContainer, before: licenseBlock };
+}
+
+function insertDeepWikiLink(placement) {
+    if (document.querySelector(placement.existingSelector)) {
+        return;
+    }
+
+    const insertionPoint = placement.getInsertionPoint();
+    if (!insertionPoint) {
+        return;
+    }
+
+    const deepwikiUrl = `https://deepwiki.com${window.location.pathname}`;
+    const element = renderPlacementLink(placement, deepwikiUrl);
+    insertionPoint.parent.insertBefore(element, insertionPoint.before);
+    logger(placement.logMessage, deepwikiUrl);
 }
 
 function checkAndCreateUI() {
@@ -102,7 +164,7 @@ function checkAndCreateUI() {
     if (!isGithubRepo(path)) {
         return;
     }
-    CreateUI();
+    PLACEMENTS.forEach(insertDeepWikiLink);
 }
 
 (function () {
@@ -115,7 +177,7 @@ function checkAndCreateUI() {
     // 监听页面变化
     const observer = new MutationObserver((mutations) => {
         // 检查 Readme 入口是否存在
-        if (document.querySelector(README_LINK_SELECTOR)) {
+        if (PLACEMENTS.some((placement) => document.querySelector(placement.observerSelector))) {
             checkAndCreateUI();
         }
     });
