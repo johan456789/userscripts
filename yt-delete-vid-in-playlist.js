@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name      Youtube button to delete a video from a playlist
 // @namespace    http://tampermonkey.net/
-// @version      2.2.6
+// @version      2.2.7
 // @description  Adds a button to directly remove videos from the playlist on YouTube
 // @author       You
 // @match        https://www.youtube.com/*
@@ -165,7 +165,7 @@ async function checkPlaylistEditable() {
 
     // Define the avatar stack selector
     const avatarStackSelector =
-      "#page-header > yt-page-header-renderer > yt-page-header-view-model > div.page-header-view-model-wiz__page-header-content > div.page-header-view-model-wiz__page-header-headline > div > yt-content-metadata-view-model > div:nth-child(1) > yt-avatar-stack-view-model > span";
+      "yt-page-header-view-model yt-content-metadata-view-model .ytContentMetadataViewModelMetadataRow yt-avatar-stack-view-model .yt-avatar-stack-view-model__avatar-stack-text";
 
     // Wait for the avatar stack to appear
     let avatarStack;
