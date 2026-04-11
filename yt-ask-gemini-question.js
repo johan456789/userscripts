@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.8
+// @version      1.0.10
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/yt-action-button.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -18,7 +18,15 @@ const TOOLTIP_TEXT = {
   disabled: "Ask Gemini not available",
 };
 const SELECTORS = {
-  topButtons: "#top-row #actions #menu #top-level-buttons-computed",
+  topButtons: [
+    "#top-row #actions #menu #top-level-buttons-computed",
+    "#top-row #actions #menu #flexible-item-buttons",
+  ],
+  nativeAskButtonHosts: [
+    "yt-button-view-model:has(button-view-model.you-chat-entrypoint-button)",
+    "yt-button-view-model:has(button[aria-label='Ask'])",
+    "yt-button-view-model:has(button .yt-spec-button-shape-next__button-text-content)",
+  ],
   geminiTriggers: [
     "#items > yt-video-description-youchat-section-view-model > div.ytVideoDescriptionYouchatSectionViewModelPrimaryButton > button-view-model > button",
     "#above-the-fold yt-video-description-youchat-section-view-model button-view-model > button",
@@ -29,6 +37,7 @@ const SELECTORS = {
   descriptionExpandTrigger: "#above-the-fold #expand",
 };
 const TAGS = { wrapper: "yt-button-view-model" };
+const STYLE_IDS = { hideNativeAsk: "yt-hide-native-ask-button-style" };
 
 const logger = Logger("[YT-ask-gemini-question]");
 logger("Userscript started.");
@@ -41,6 +50,16 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
 
   function isWatchPage() {
     return window.location.pathname === "/watch";
+  }
+
+  function getTopButtonsContainer() {
+    for (const selector of SELECTORS.topButtons) {
+      const element = document.querySelector(selector);
+      if (element) {
+        return element;
+      }
+    }
+    return null;
   }
 
   function getPanelCloseButton() {
@@ -123,6 +142,45 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
 
   function getAskGeminiTooltipText(button) {
     return button.disabled ? TOOLTIP_TEXT.disabled : TOOLTIP_TEXT.enabled;
+  }
+
+  function removeNativeAskButtons() {
+    const topButtons = getTopButtonsContainer();
+    if (!topButtons) {
+      return;
+    }
+
+    let removed = false;
+    for (const selector of SELECTORS.nativeAskButtonHosts) {
+      const hosts = topButtons.querySelectorAll(selector);
+      for (const host of hosts) {
+        if (!host.isConnected || host.querySelector(`#${IDS.askGeminiButton}`)) {
+          continue;
+        }
+
+        const hasYouChatClass = Boolean(
+          host.querySelector("button-view-model.you-chat-entrypoint-button")
+        );
+        const askButton = host.querySelector("button");
+        const buttonTextNode = host.querySelector(
+          ".yt-spec-button-shape-next__button-text-content"
+        );
+        const buttonText = (buttonTextNode?.textContent || "").trim();
+        const isAskLabel = askButton?.getAttribute("aria-label") === "Ask";
+        const isAskText = buttonText === "Ask";
+
+        if (!hasYouChatClass && !isAskLabel && !isAskText) {
+          continue;
+        }
+
+        host.remove();
+        removed = true;
+      }
+    }
+
+    if (removed) {
+      logger("Removed YouTube native Ask button");
+    }
   }
 
   function createAskGeminiIcon() {
@@ -240,7 +298,7 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
   }
 
   function addAskGeminiButton() {
-    const topButtons = document.querySelector(SELECTORS.topButtons);
+    const topButtons = getTopButtonsContainer();
     if (!topButtons) {
       return null;
     }
@@ -278,6 +336,8 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
       return;
     }
 
+    removeNativeAskButtons();
+
     const button = addAskGeminiButton();
     if (button) {
       tryExpandDescription();
@@ -290,7 +350,18 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
   }
 
   function init() {
+    const hideStyle = document.createElement("style");
+    hideStyle.id = STYLE_IDS.hideNativeAsk;
+    hideStyle.textContent = `
+#top-row #actions #menu #flexible-item-buttons button-view-model.you-chat-entrypoint-button,
+#top-row #actions #menu #flexible-item-buttons yt-button-view-model:has(button-view-model.you-chat-entrypoint-button) {
+  display: none !important;
+}
+`;
+    document.head.appendChild(hideStyle);
+
     const observer = new MutationObserver(() => {
+      removeNativeAskButtons();
       ensureAskGeminiButton();
     });
 
