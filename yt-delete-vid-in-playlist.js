@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name      Youtube button to delete a video from a playlist
 // @namespace    http://tampermonkey.net/
-// @version      2.2.7
+// @version      2.2.8
 // @description  Adds a button to directly remove videos from the playlist on YouTube
 // @author       You
 // @match        https://www.youtube.com/*
@@ -346,21 +346,25 @@ function addRemoveButtons() {
 
           // Set up observer for newly loaded videos
           observer = new MutationObserver((mutations) => {
-            logger(`in observer: isEditable is ${isEditable}`);
-            if (isEditable) {
-              mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                  if (
-                    node.nodeType === 1 &&
-                    node.matches("ytd-playlist-video-renderer")
-                  ) {
-                    addRemoveButton(node);
-                  }
-                });
+            mutations.forEach((mutation) => {
+              mutation.addedNodes.forEach((node) => {
+                if (node.nodeType !== 1) return;
+                if (node.matches("ytd-playlist-video-renderer")) {
+                  addRemoveButton(node);
+                  return;
+                }
+                const nestedVideos = node.querySelectorAll?.(
+                  "ytd-playlist-video-renderer"
+                );
+                nestedVideos?.forEach(addRemoveButton);
               });
-            }
+            });
           });
-          observer.observe(document.body, { childList: true, subtree: true });
+
+          const playlistRoot =
+            document.querySelector("ytd-browse[page-subtype='playlist']") ||
+            document.body;
+          observer.observe(playlistRoot, { childList: true, subtree: true });
         }
       });
     }
@@ -375,9 +379,15 @@ function addRemoveButtons() {
         logger("URL changed, re-checking playlist editability");
         setupDeleteButtons();
       }
-    }, 100); // check periodically
+    }, 1000); // check periodically
 
-    // window.addEventListener('yt-navigate-finish', addRemoveButtons);
+    window.addEventListener("yt-navigate-finish", () => {
+      if (window.location.href !== lastUrl) {
+        lastUrl = window.location.href;
+        logger("yt-navigate-finish, re-checking playlist editability");
+        setupDeleteButtons();
+      }
+    });
   }
 
   init();
