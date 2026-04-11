@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.10
+// @version      1.0.11
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/yt-action-button.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -356,6 +356,11 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
 #top-row #actions #menu #flexible-item-buttons button-view-model.you-chat-entrypoint-button,
 #top-row #actions #menu #flexible-item-buttons yt-button-view-model:has(button-view-model.you-chat-entrypoint-button) {
   display: none !important;
+}
+
+#top-row #actions #menu ytd-menu-renderer:has(#ask-gemini-button) {
+  overflow: visible !important;
+  overflow-y: visible !important;
 }
 `;
     document.head.appendChild(hideStyle);
