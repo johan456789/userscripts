@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.5.2
+// @version      0.6.0
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -11,6 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      api.elevenlabs.io
+// @connect      generativelanguage.googleapis.com
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/cache.js
@@ -36,18 +37,37 @@ const CONFIG = {
       "storybook > div > div.ng-star-inserted:not(.hide) > storybook-page.right > div:not(.underneath) p.story-text",
   },
   cache: {
-    version: "v2",
+    version: "v3",
     ttlMs: 30 * 24 * 60 * 60 * 1000,
     evictIntervalMs: 6 * 60 * 60 * 1000,
   },
   tts: {
-    apiKeyStorageKey: "gemini_storybook_tts_elevenlabs_api_key",
-    endpointType: "tts_with_timestamps",
-    voiceId: "JBFqnCBsd6RMkjVDRZzb",
-    outputFormat: "mp3_44100_128",
-    modelId: "eleven_flash_v2_5",
-    languageCode: "es",
-    voiceSettings: { speed: 0.8 },
+    providerId: "gemini",
+    providers: {
+      elevenlabs: {
+        displayName: "ElevenLabs",
+        apiKeyStorageKey: "gemini_storybook_tts_elevenlabs_api_key",
+        endpointType: "tts_with_timestamps",
+        voiceId: "JBFqnCBsd6RMkjVDRZzb",
+        outputFormat: "mp3_44100_128",
+        modelId: "eleven_flash_v2_5",
+        languageCode: "es",
+        voiceSettings: { speed: 0.8 },
+      },
+      gemini: {
+        displayName: "Gemini",
+        apiKeyStorageKey: "gemini_storybook_tts_gemini_api_key",
+        modelId: "gemini-3.1-flash-tts-preview",
+        endpointMethod: "streamGenerateContent",
+        voiceName: "Zephyr",
+        temperature: 1,
+        scene: "Bedtime Story",
+        sampleContext: "A young latina mom telling a story to her child.",
+        sampleRate: 24000,
+        channels: 1,
+        bitsPerSample: 16,
+      },
+    },
   },
   svg: {
     play: {
@@ -95,6 +115,24 @@ function setIconSvg(target, svgDef) {
   target.replaceChildren(svg);
 }
 
+function getActiveProviderConfig() {
+  const providerId = CONFIG.tts.providerId;
+  const providerConfig = CONFIG.tts.providers[providerId];
+  if (!providerConfig) {
+    throw new Error(`Unknown TTS provider configured: ${providerId}`);
+  }
+  return {
+    id: providerId,
+    ...providerConfig,
+  };
+}
+
+function buildProviderCacheSignature() {
+  const provider = getActiveProviderConfig();
+  const { apiKeyStorageKey, displayName, ...cacheConfig } = provider;
+  return JSON.stringify(cacheConfig);
+}
+
 const Cache = (() => {
   const idb = typeof idbKeyval !== "undefined" ? idbKeyval : null;
   const idbStore = idb?.createStore?.("gemini-storybook-tts", "tts-cache");
@@ -122,7 +160,7 @@ const Cache = (() => {
   }
 
   async function buildKey(text) {
-    const textHash = await hashString(text);
+    const textHash = await hashString(`${buildProviderCacheSignature()}\n${text}`);
     return `tts:${CONFIG.cache.version}:${textHash}`;
   }
 
@@ -153,75 +191,283 @@ const Cache = (() => {
 })();
 
 const TTS = (() => {
-  function getApiKeyOrPrompt() {
-    let apiKey = GM_getValue(CONFIG.tts.apiKeyStorageKey, "");
+  const providers = {
+    elevenlabs: {
+      buildRequest(text, apiKey, config) {
+        const payload = {
+          text,
+          model_id: config.modelId,
+          language_code: config.languageCode,
+          output_format: config.outputFormat,
+          voice_settings: config.voiceSettings,
+        };
+        return {
+          endpoint: `https://api.elevenlabs.io/v1/text-to-speech/${config.voiceId}/with-timestamps`,
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          payload,
+          timeout: 15000,
+        };
+      },
+
+      parseResponse(responseText, config) {
+        const data = JSON.parse(responseText);
+        const { audio_base64, alignment, normalized_alignment } = data;
+
+        if (!audio_base64) {
+          throw new Error("No audio data in ElevenLabs response");
+        }
+
+        const contentType = config.outputFormat.startsWith("mp3")
+          ? "audio/mpeg"
+          : config.outputFormat.startsWith("pcm")
+          ? "audio/pcm"
+          : "audio/mpeg";
+
+        return {
+          audioBlob: base64ToBlob(audio_base64, contentType),
+          contentType,
+          endpointType: config.endpointType,
+          alignment: alignment || null,
+          normalizedAlignment: normalized_alignment || null,
+        };
+      },
+    },
+
+    gemini: {
+      buildRequest(text, apiKey, config) {
+        const method = config.endpointMethod || "generateContent";
+        const payload = {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `## Scene:\n${config.scene || ""}\n\n## Sample Context:\n${
+                    config.sampleContext || ""
+                  }\n\n## Transcript:\n${text}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            temperature: config.temperature,
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: config.voiceName,
+                },
+              },
+            },
+          },
+          model: config.modelId,
+        };
+
+        return {
+          endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${config.modelId}:${method}?key=${encodeURIComponent(apiKey)}`,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          payload,
+          timeout: 30000,
+        };
+      },
+
+      parseResponse(responseText, config) {
+        const inlineAudioParts = extractGeminiInlineAudioParts(responseText);
+        if (inlineAudioParts.length === 0) {
+          throw new Error("No audio data in Gemini response");
+        }
+
+        const mimeType = inlineAudioParts[0].mimeType || "";
+        const audioBytes = concatUint8Arrays(
+          inlineAudioParts.map((part) => base64ToBytes(part.data))
+        );
+
+        if (/audio\/wav/i.test(mimeType)) {
+          return {
+            audioBlob: new Blob([audioBytes], { type: "audio/wav" }),
+            contentType: "audio/wav",
+            alignment: null,
+            normalizedAlignment: null,
+          };
+        }
+
+        return {
+          audioBlob: pcmBytesToWavBlob(audioBytes, {
+            sampleRate: getPcmSampleRate(mimeType, config.sampleRate),
+            channels: config.channels,
+            bitsPerSample: config.bitsPerSample,
+          }),
+          contentType: "audio/wav",
+          alignment: null,
+          normalizedAlignment: null,
+        };
+      },
+    },
+  };
+
+  function getApiKeyOrPrompt(provider) {
+    let apiKey = GM_getValue(provider.apiKeyStorageKey, "");
     if (!apiKey) {
+      const modelLabel = provider.modelId ? ` (${provider.modelId})` : "";
       const userInput = prompt(
-        "[gemini-storybook-tts] ElevenLabs API key not set. Please enter your ElevenLabs API key:",
+        `[gemini-storybook-tts] ${provider.displayName}${modelLabel} API key not set. Please enter your ${provider.displayName} API key:`,
         ""
       );
       if (userInput) {
         const trimmed = userInput.trim();
         if (trimmed) {
           apiKey = trimmed;
-          GM_setValue(CONFIG.tts.apiKeyStorageKey, apiKey);
-          logger("Saved ElevenLabs API key");
+          GM_setValue(provider.apiKeyStorageKey, apiKey);
+          logger(`Saved ${provider.displayName} API key`);
         }
       }
     }
     if (!apiKey) {
-      logger.warn("ElevenLabs API key missing. Aborting TTS request.");
+      logger.warn(`${provider.displayName} API key missing. Aborting TTS request.`);
       return null;
     }
     return apiKey;
   }
 
-  function buildRequestPayload(text) {
+  function getActiveProvider() {
+    const config = getActiveProviderConfig();
+    const adapter = providers[config.id];
+    if (!adapter) {
+      throw new Error(`No TTS provider adapter registered: ${config.id}`);
+    }
     return {
-      endpoint: `https://api.elevenlabs.io/v1/text-to-speech/${CONFIG.tts.voiceId}/with-timestamps`,
-      payload: {
-        text,
-        model_id: CONFIG.tts.modelId,
-        language_code: CONFIG.tts.languageCode,
-        output_format: CONFIG.tts.outputFormat,
-        voice_settings: CONFIG.tts.voiceSettings,
-      },
-      cacheParams: {
-        endpointType: CONFIG.tts.endpointType,
-      },
+      ...config,
+      adapter,
     };
   }
 
-  function base64ToBlob(base64, contentType = "audio/mpeg") {
+  function base64ToBytes(base64) {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    return new Blob([bytes], { type: contentType });
+    return bytes;
+  }
+
+  function base64ToBlob(base64, contentType = "audio/mpeg") {
+    return new Blob([base64ToBytes(base64)], { type: contentType });
+  }
+
+  function concatUint8Arrays(chunks) {
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return result;
+  }
+
+  function writeAscii(view, offset, value) {
+    for (let i = 0; i < value.length; i++) {
+      view.setUint8(offset + i, value.charCodeAt(i));
+    }
+  }
+
+  function pcmBytesToWavBlob(
+    pcmBytes,
+    { sampleRate = 24000, channels = 1, bitsPerSample = 16 } = {}
+  ) {
+    const headerLength = 44;
+    const bytesPerSample = bitsPerSample / 8;
+    const wavBuffer = new ArrayBuffer(headerLength + pcmBytes.length);
+    const view = new DataView(wavBuffer);
+
+    writeAscii(view, 0, "RIFF");
+    view.setUint32(4, 36 + pcmBytes.length, true);
+    writeAscii(view, 8, "WAVE");
+    writeAscii(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, channels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * channels * bytesPerSample, true);
+    view.setUint16(32, channels * bytesPerSample, true);
+    view.setUint16(34, bitsPerSample, true);
+    writeAscii(view, 36, "data");
+    view.setUint32(40, pcmBytes.length, true);
+    new Uint8Array(wavBuffer, headerLength).set(pcmBytes);
+
+    return new Blob([wavBuffer], { type: "audio/wav" });
+  }
+
+  function parseGeminiResponseChunks(responseText) {
+    const trimmed = responseText.trim().replace(/^\)\]\}'\s*/, "");
+    if (!trimmed) return [];
+
+    if (trimmed.startsWith("data:")) {
+      return trimmed
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .filter((line) => line && line !== "[DONE]")
+        .map((line) => JSON.parse(line));
+    }
+
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  }
+
+  function getPcmSampleRate(mimeType, fallback) {
+    const match = String(mimeType).match(/rate=(\d+)/i);
+    if (!match) return fallback;
+    const sampleRate = Number(match[1]);
+    return Number.isFinite(sampleRate) ? sampleRate : fallback;
+  }
+
+  function extractGeminiInlineAudioParts(responseText) {
+    const chunks = parseGeminiResponseChunks(responseText);
+    const parts = [];
+
+    for (const chunk of chunks) {
+      for (const candidate of chunk.candidates || []) {
+        for (const part of candidate.content?.parts || []) {
+          const inlineData = part.inlineData || part.inline_data;
+          const data = inlineData?.data;
+          if (!data) continue;
+          parts.push({
+            data,
+            mimeType: inlineData.mimeType || inlineData.mime_type || "",
+          });
+        }
+      }
+    }
+
+    return parts;
   }
 
   async function request(text, options = {}) {
     const { onBeforeNetwork } = options;
     onBeforeNetwork?.();
 
-    const apiKey = getApiKeyOrPrompt();
+    const provider = getActiveProvider();
+    const apiKey = getApiKeyOrPrompt(provider);
     if (!apiKey) return null;
 
-    const { endpoint, payload, cacheParams } = buildRequestPayload(text);
+    const requestConfig = provider.adapter.buildRequest(text, apiKey, provider);
 
     try {
       const responseText = await new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
           method: "POST",
-          url: endpoint,
-          headers: {
-            "xi-api-key": apiKey,
-            "Content-Type": "application/json",
-          },
-          data: JSON.stringify(payload),
+          url: requestConfig.endpoint,
+          headers: requestConfig.headers,
+          data: JSON.stringify(requestConfig.payload),
           responseType: "text",
-          timeout: 15000,
+          timeout: requestConfig.timeout,
           onload: (res) => {
             if (res.status >= 200 && res.status < 300 && res.responseText) {
               resolve(res.responseText);
@@ -242,27 +488,10 @@ const TTS = (() => {
         });
       });
 
-      const data = JSON.parse(responseText);
-      const { audio_base64, alignment, normalized_alignment } = data;
-
-      if (!audio_base64) {
-        throw new Error("No audio data in response");
-      }
-
-      const contentType = payload.output_format.startsWith("mp3")
-        ? "audio/mpeg"
-        : payload.output_format.startsWith("pcm")
-        ? "audio/pcm"
-        : "audio/mpeg";
-
-      const audioBlob = base64ToBlob(audio_base64, contentType);
-
       const entry = {
-        audioBlob,
-        contentType,
-        endpointType: cacheParams.endpointType,
-        alignment: alignment || null,
-        normalizedAlignment: normalized_alignment || null,
+        providerId: provider.id,
+        modelId: provider.modelId,
+        ...provider.adapter.parseResponse(responseText, provider),
       };
 
       await Cache.setItem(text, entry);
