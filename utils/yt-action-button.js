@@ -8,7 +8,7 @@
   const YOUTUBE_ACTION_BUTTON_STYLE_ID = "userscript-yt-action-button-styles";
   const YOUTUBE_ACTION_BUTTON_TAGS = { wrapper: "yt-button-view-model" };
   const YOUTUBE_ACTION_BUTTON_CLASS_LIST =
-    "yt-spec-button-shape-next yt-spec-button-shape-next--tonal yt-spec-button-shape-next--mono yt-spec-button-shape-next--size-m yt-spec-button-shape-next--enable-backdrop-filter-experiment"
+    "ytSpecButtonShapeNextHost ytSpecButtonShapeNextTonal ytSpecButtonShapeNextMono ytSpecButtonShapeNextSizeM ytSpecButtonShapeNextEnableBackdropFilterExperiment"
       .split(" ")
       .filter(Boolean);
 
@@ -26,12 +26,12 @@
   --userscript-yt-action-button-tooltip-offset: 8px;
 }
 
-.${YOUTUBE_ACTION_BUTTON_CLASSES.host} button.yt-spec-button-shape-next[disabled] {
+.${YOUTUBE_ACTION_BUTTON_CLASSES.host} button.ytSpecButtonShapeNextHost[disabled] {
   opacity: 0.5;
   cursor: default !important;
 }
 
-.${YOUTUBE_ACTION_BUTTON_CLASSES.host} button.yt-spec-button-shape-next:not([disabled]) {
+.${YOUTUBE_ACTION_BUTTON_CLASSES.host} button.ytSpecButtonShapeNextHost:not([disabled]) {
   cursor: pointer;
 }
 
@@ -61,21 +61,21 @@
 
   function createTouchFeedback() {
     const touchFeedback = document.createElement("yt-touch-feedback-shape");
+    touchFeedback.classList.add(
+      "ytSpecTouchFeedbackShapeHost",
+      "ytSpecTouchFeedbackShapeTouchResponse"
+    );
+    touchFeedback.setAttribute("aria-hidden", "true");
     touchFeedback.style.borderRadius = "inherit";
 
-    const feedbackContainer = document.createElement("div");
-    feedbackContainer.className =
-      "yt-spec-touch-feedback-shape yt-spec-touch-feedback-shape--touch-response";
-
     const stroke = document.createElement("div");
-    stroke.className = "yt-spec-touch-feedback-shape__stroke";
+    stroke.classList.add("ytSpecTouchFeedbackShapeStroke");
 
     const fill = document.createElement("div");
-    fill.className = "yt-spec-touch-feedback-shape__fill";
+    fill.classList.add("ytSpecTouchFeedbackShapeFill");
 
-    feedbackContainer.appendChild(stroke);
-    feedbackContainer.appendChild(fill);
-    touchFeedback.appendChild(feedbackContainer);
+    touchFeedback.appendChild(stroke);
+    touchFeedback.appendChild(fill);
 
     return touchFeedback;
   }
@@ -154,7 +154,9 @@
 
     const button = document.createElement("button");
     button.classList.add(...YOUTUBE_ACTION_BUTTON_CLASS_LIST);
+    button.type = "button";
     button.toggleAttribute("disabled", initialDisabled);
+    button.setAttribute("aria-disabled", String(Boolean(initialDisabled)));
 
     const { tooltip, tooltipPopover } = createTooltip(getTooltipText(button));
     syncTooltipState(button, tooltipPopover, getTooltipText);
@@ -183,7 +185,9 @@
       tooltipPopover,
       contentRefs,
       setDisabled(disabled) {
-        button.toggleAttribute("disabled", Boolean(disabled));
+        const isDisabled = Boolean(disabled);
+        button.toggleAttribute("disabled", isDisabled);
+        button.setAttribute("aria-disabled", String(isDisabled));
         syncTooltipState(button, tooltipPopover, getTooltipText);
       },
       syncTooltipText() {

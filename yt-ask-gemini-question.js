@@ -5,7 +5,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      1.0.11
+// @version      1.0.12
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/yt-action-button.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-ask-gemini-question.js
@@ -25,7 +25,7 @@ const SELECTORS = {
   nativeAskButtonHosts: [
     "yt-button-view-model:has(button-view-model.you-chat-entrypoint-button)",
     "yt-button-view-model:has(button[aria-label='Ask'])",
-    "yt-button-view-model:has(button .yt-spec-button-shape-next__button-text-content)",
+    "yt-button-view-model:has(button .ytSpecButtonShapeNextButtonTextContent)",
   ],
   geminiTriggers: [
     "#items > yt-video-description-youchat-section-view-model > div.ytVideoDescriptionYouchatSectionViewModelPrimaryButton > button-view-model > button",
@@ -163,7 +163,7 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
         );
         const askButton = host.querySelector("button");
         const buttonTextNode = host.querySelector(
-          ".yt-spec-button-shape-next__button-text-content"
+          ".ytSpecButtonShapeNextButtonTextContent"
         );
         const buttonText = (buttonTextNode?.textContent || "").trim();
         const isAskLabel = askButton?.getAttribute("aria-label") === "Ask";
@@ -186,7 +186,7 @@ const DESCRIPTION_EXPAND_COOLDOWN_MS = 1000;
   function createAskGeminiIcon() {
     const icon = document.createElement("div");
     icon.setAttribute("aria-hidden", "true");
-    icon.className = "yt-spec-button-shape-next__icon";
+    icon.className = "ytSpecButtonShapeNextIcon";
 
     const wrapperHost = document.createElement("span");
     wrapperHost.className = "ytIconWrapperHost";

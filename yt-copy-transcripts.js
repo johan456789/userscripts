@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.7
+// @version      2.3.8
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/yt-action-button.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -24,7 +24,7 @@ const SELECTORS = {
   topButtons: "#top-row #actions #menu #top-level-buttons-computed",
 };
 const CLASSES = {
-  buttonTextContent: "yt-spec-button-shape-next__button-text-content",
+  buttonTextContent: "ytSpecButtonShapeNextButtonTextContent",
 };
 const TAGS = { wrapper: "yt-button-view-model" };
 const ICONS = { maskId: "copy-mask" };
@@ -37,13 +37,13 @@ let transcriptButtonComponent = null;
 
 const cssText = `
 /* Center icon within YouTube button text container */
-#${IDS.transcriptButton} .yt-spec-button-shape-next__button-text-content {
+#${IDS.transcriptButton} .ytSpecButtonShapeNextButtonTextContent {
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-#${IDS.transcriptButton} .yt-spec-button-shape-next__button-text-content svg {
+#${IDS.transcriptButton} .ytSpecButtonShapeNextButtonTextContent svg {
     display: block;
 }
 `;
