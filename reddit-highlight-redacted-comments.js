@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Replace Redacted Comments
 // @namespace    http://tampermonkey.net/
-// @version      0.1.6
+// @version      0.1.8
 // @description  Replace Redact-style mass-deleted Reddit comment bodies with a simple placeholder.
 // @include      *://reddit.com/*
 // @include      *://*.reddit.com/*
@@ -21,8 +21,8 @@
   "use strict";
 
   const logger = Logger("[Reddit-Replace-Redacted-Comments]");
-  const COMMENT_SELECTOR = "shreddit-comment";
   const BODY_SELECTOR = '[slot="comment"]';
+  const REDACT_LINK_SELECTOR = 'a[href*="redact.dev"]';
   const REDACTED_TEXT = "----REDACTED----";
   const REDACTED_MARKER_ATTRIBUTE = "data-redacted-placeholder-applied";
   const ELEMENT_NODE = 1;
@@ -30,29 +30,24 @@
 
   logger("Userscript started.");
 
-  function getCommentBody(commentElement) {
-    return commentElement.querySelector(`:scope > ${BODY_SELECTOR}`) || commentElement.querySelector(BODY_SELECTOR);
+  function getBodyFromNode(node) {
+    if (!node || node.nodeType !== ELEMENT_NODE) {
+      return null;
+    }
+
+    if (node.matches(BODY_SELECTOR)) {
+      return node;
+    }
+
+    return node.closest(BODY_SELECTOR) || node.querySelector(BODY_SELECTOR);
   }
 
   function isAlreadyReplaced(bodyElement) {
     return bodyElement.getAttribute(REDACTED_MARKER_ATTRIBUTE) === "true";
   }
 
-  function isRedactMassDeletedComment(bodyElement) {
-    const bodyText = (bodyElement.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
-    if (!bodyText) {
-      return false;
-    }
-
-    const hasRedactLink = Boolean(bodyElement.querySelector('a[href*="redact.dev"]'));
-    const mentionsMassDelete = bodyText.includes("mass deleted");
-    const mentionsAnonymized = bodyText.includes("anonymized");
-    const mentionsRedact = bodyText.includes("redact");
-
-    return (
-      (hasRedactLink && (mentionsMassDelete || mentionsAnonymized)) ||
-      (mentionsMassDelete && mentionsAnonymized && mentionsRedact)
-    );
+  function hasRedactLink(bodyElement) {
+    return Boolean(bodyElement.querySelector(REDACT_LINK_SELECTOR));
   }
 
   function replaceCommentBody(bodyElement) {
@@ -66,9 +61,8 @@
     return true;
   }
 
-  function processComment(commentElement) {
-    const bodyElement = getCommentBody(commentElement);
-    if (!bodyElement || !isRedactMassDeletedComment(bodyElement)) {
+  function processBody(bodyElement) {
+    if (!bodyElement || !hasRedactLink(bodyElement)) {
       return;
     }
 
@@ -78,7 +72,7 @@
   }
 
   function scanDocument() {
-    document.querySelectorAll(COMMENT_SELECTOR).forEach(processComment);
+    document.querySelectorAll(BODY_SELECTOR).forEach(processBody);
   }
 
   function processNode(node) {
@@ -86,11 +80,15 @@
       return;
     }
 
-    if (node.matches(COMMENT_SELECTOR)) {
-      processComment(node);
+    const bodyElement = getBodyFromNode(node);
+    if (bodyElement) {
+      processBody(bodyElement);
     }
 
-    node.querySelectorAll(COMMENT_SELECTOR).forEach(processComment);
+    node.querySelectorAll(BODY_SELECTOR).forEach(processBody);
+    node.querySelectorAll(REDACT_LINK_SELECTOR).forEach((linkElement) => {
+      processBody(getBodyFromNode(linkElement));
+    });
   }
 
   function start() {
@@ -107,9 +105,9 @@
         mutation.addedNodes.forEach(processNode);
 
         if (mutation.target && mutation.target.nodeType === ELEMENT_NODE) {
-          const commentElement = mutation.target.closest(COMMENT_SELECTOR);
-          if (commentElement) {
-            processComment(commentElement);
+          const bodyElement = getBodyFromNode(mutation.target);
+          if (bodyElement) {
+            processBody(bodyElement);
           }
         }
       });
