@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name                    DeepWiki Search Tab Title
 // @namespace               http://tampermonkey.net/
-// @version                 0.1.0
-// @description             Change DeepWiki search page tab title to "{repo_name} | {question}"
-// @match                   https://deepwiki.com/search/*
+// @version                 0.1.1
+// @description             Change DeepWiki tab title to "{repo_name} | {question}"
+// @match                   https://deepwiki.com/*
 // @require                 https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require                 https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @downloadURL             https://github.com/johan456789/userscripts/raw/refs/heads/main/deepwiki-search-tab-title.js
@@ -17,6 +17,17 @@
 
     const REPO_LINK_SELECTOR = '#\\31  > div.flex.max-h-fit.min-w-0.flex-1.flex-shrink-0.flex-col.xl\\:\\[flex-grow\\:2\\] > div > div.flex.flex-col > a';
     const QUESTION_CONTAINER_SELECTOR = '#\\31  > div.flex.max-h-fit.min-w-0.flex-1.flex-shrink-0.flex-col.xl\\:\\[flex-grow\\:2\\] > div > div.flex.flex-col > div';
+    const DEEPWIKI_ROOT_PATHS = new Set(["", "search"]);
+    let lastQuestion = null;
+
+    function getRepoNameFromUrl() {
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        if (pathParts.length < 2 || DEEPWIKI_ROOT_PATHS.has(pathParts[0])) {
+            return null;
+        }
+
+        return decodeURIComponent(pathParts[1]);
+    }
 
     function getRepoName() {
         const repoLink = document.querySelector(REPO_LINK_SELECTOR);
@@ -32,22 +43,47 @@
         return text;
     }
 
+    function getQuestionFromSearchInput() {
+        const searchInputs = document.querySelectorAll('input[type="search"], textarea, input[name="q"]');
+        for (const searchInput of searchInputs) {
+            const question = searchInput.value?.trim();
+            if (question) {
+                lastQuestion = question;
+                return question;
+            }
+        }
+
+        return lastQuestion;
+    }
+
     function getQuestion() {
         const container = document.querySelector(QUESTION_CONTAINER_SELECTOR);
-        if (!container) return null;
+        if (!container) return getQuestionFromSearchInput();
 
         const questionSpan = container.querySelector('span');
-        if (!questionSpan) return null;
+        if (!questionSpan) return getQuestionFromSearchInput();
 
         const clone = questionSpan.cloneNode(true);
         const button = clone.querySelector('button');
         if (button) button.remove();
 
-        return clone.textContent?.trim() || null;
+        return clone.textContent?.trim() || getQuestionFromSearchInput();
+    }
+
+    function rememberQuestionFromEvent(event) {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+            return;
+        }
+
+        const question = target.value?.trim();
+        if (question) {
+            lastQuestion = question;
+        }
     }
 
     function updateTitle() {
-        const repoName = getRepoName();
+        const repoName = getRepoName() || getRepoNameFromUrl();
         const question = getQuestion();
 
         if (repoName && question) {
@@ -59,21 +95,45 @@
         }
     }
 
+    function observeTitleTargets() {
+        updateTitle();
+
+        const observer = new MutationObserver(() => {
+            updateTitle();
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    }
+
+    function updateTitleAfterNavigation() {
+        window.setTimeout(updateTitle, 0);
+        window.setTimeout(updateTitle, 250);
+        window.setTimeout(updateTitle, 1000);
+    }
+
+    function wrapHistoryMethod(methodName) {
+        const original = history[methodName];
+        history[methodName] = function (...args) {
+            const result = original.apply(this, args);
+            updateTitleAfterNavigation();
+            return result;
+        };
+    }
+
     logger("Script started.");
 
-    waitForElement(REPO_LINK_SELECTOR, () => {
-        waitForElement(QUESTION_CONTAINER_SELECTOR, () => {
-            updateTitle();
+    document.addEventListener("input", rememberQuestionFromEvent, true);
+    wrapHistoryMethod("pushState");
+    wrapHistoryMethod("replaceState");
+    window.addEventListener("popstate", updateTitleAfterNavigation);
 
-            const observer = new MutationObserver(() => {
-                updateTitle();
-            });
-
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-                characterData: true
-            });
-        });
-    });
+    if (document.body) {
+        observeTitleTargets();
+    } else {
+        waitForElement("body", observeTitleTargets);
+    }
 })();
