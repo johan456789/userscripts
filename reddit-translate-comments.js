@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Translate Comments
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.1.1
 // @description  Add a translate button to Reddit comments that translates foreign language comments to English
 // @include      *://reddit.com/*
 // @include      *://*.reddit.com/*
@@ -33,8 +33,8 @@
     <path d="M192 64C209.7 64 224 78.3 224 96L224 128L352 128C369.7 128 384 142.3 384 160C384 177.7 369.7 192 352 192L342.4 192L334 215.1C317.6 260.3 292.9 301.6 261.8 337.1C276 345.9 290.8 353.7 306.2 360.6L356.6 383L418.8 243C423.9 231.4 435.4 224 448 224C460.6 224 472.1 231.4 477.2 243L605.2 531C612.4 547.2 605.1 566.1 589 573.2C572.9 580.3 553.9 573.1 546.8 557L526.8 512L369.3 512L349.3 557C342.1 573.2 323.2 580.4 307.1 573.2C291 566 283.7 547.1 290.9 531L330.7 441.5L280.3 419.1C257.3 408.9 235.3 396.7 214.5 382.7C193.2 399.9 169.9 414.9 145 427.4L110.3 444.6C94.5 452.5 75.3 446.1 67.4 430.3C59.5 414.5 65.9 395.3 81.7 387.4L116.2 370.1C132.5 361.9 148 352.4 162.6 341.8C148.8 329.1 135.8 315.4 123.7 300.9L113.6 288.7C102.3 275.1 104.1 254.9 117.7 243.6C131.3 232.3 151.5 234.1 162.8 247.7L173 259.9C184.5 273.8 197.1 286.7 210.4 298.6C237.9 268.2 259.6 232.5 273.9 193.2L274.4 192L64.1 192C46.3 192 32 177.7 32 160C32 142.3 46.3 128 64 128L160 128L160 96C160 78.3 174.3 64 192 64zM448 334.8L397.7 448L498.3 448L448 334.8z"/>
   </svg>`;
 
-  // Store original text for each comment
-  const originalTexts = new WeakMap();
+  // Store original HTML for each comment (to preserve images/figures on restore)
+  const originalHTML = new WeakMap();
 
   logger("Userscript started.");
 
@@ -76,6 +76,7 @@
 
   /**
    * Get the text content from a comment body element
+   * Only extracts text from <p> elements, ignoring figures/images
    * @param {Element} bodyElement - The comment body element
    * @returns {string} - The text content
    */
@@ -91,7 +92,7 @@
 
   /**
    * Set the text content of a comment body element
-   * Preserves the structure with paragraphs
+   * Preserves non-text elements (figures, images, etc.) and only replaces <p> text
    * @param {Element} bodyElement - The comment body element
    * @param {string} text - The text to set
    */
@@ -106,10 +107,29 @@
       contentDiv = bodyElement;
     }
 
-    const paragraphs = text.split("\n\n");
-    contentDiv.innerHTML = paragraphs
-      .map((p) => `<p dir="auto">${escapeHtml(p)}</p>`)
-      .join("");
+    const paragraphs = contentDiv.querySelectorAll("p");
+    const textParts = text.split("\n\n");
+
+    if (paragraphs.length > 0) {
+      // Replace text in existing <p> elements, preserving their position
+      paragraphs.forEach((p, index) => {
+        if (index < textParts.length) {
+          p.textContent = textParts[index];
+        } else {
+          p.textContent = "";
+        }
+      });
+
+      // If we have more text parts than paragraphs, append to the last paragraph
+      if (textParts.length > paragraphs.length) {
+        const lastP = paragraphs[paragraphs.length - 1];
+        const extraText = textParts.slice(paragraphs.length).join("\n\n");
+        lastP.textContent += "\n\n" + extraText;
+      }
+    } else {
+      // Fallback: just set text content if no paragraphs found
+      contentDiv.textContent = text;
+    }
   }
 
   /**
@@ -151,16 +171,23 @@
         return;
       }
 
+      // Find the content container
+      const contentDiv =
+        bodyElement.querySelector(".py-0") ||
+        bodyElement.querySelector(".md") ||
+        bodyElement.querySelector("div") ||
+        bodyElement;
+
       const textSpan = button.querySelector("span > span:last-child");
 
       if (isTranslated) {
-        // Restore original text
-        const original = originalTexts.get(comment);
+        // Restore original HTML (preserves images, figures, etc.)
+        const original = originalHTML.get(comment);
         if (original) {
-          setCommentText(bodyElement, original);
+          contentDiv.innerHTML = original;
           textSpan.textContent = "Translate";
           isTranslated = false;
-          logger("Restored original text");
+          logger("Restored original content");
         }
       } else {
         // Translate
@@ -170,8 +197,8 @@
           return;
         }
 
-        // Store original text
-        originalTexts.set(comment, originalText);
+        // Store original HTML (to preserve images/figures on restore)
+        originalHTML.set(comment, contentDiv.innerHTML);
 
         // Show loading state
         textSpan.textContent = "Translating...";
@@ -186,7 +213,7 @@
         } catch (error) {
           logger.error("Translation failed:", error);
           textSpan.textContent = "Translate";
-          originalTexts.delete(comment);
+          originalHTML.delete(comment);
         } finally {
           button.disabled = false;
         }
