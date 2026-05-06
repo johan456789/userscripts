@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Remove Discover More Feed
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @description  Hide the irrelevant "Discover more" feed and everything after it in comment threads.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -24,10 +24,11 @@ logger("Userscript started.");
 (function () {
   "use strict";
 
-  const CELL_SELECTOR = 'main div[data-testid="cellInnerDiv"]';
+  const CELL_SELECTOR = 'div[data-testid="cellInnerDiv"]';
   const DISCOVER_TEXT = "discover more";
 
   function cellContainsDiscoverMore(cell) {
+    // Method 1: Check spans with exact text match (original mechanism)
     const spans = cell.querySelectorAll("span");
     for (const span of spans) {
       const text = span.textContent || "";
@@ -35,6 +36,16 @@ logger("Userscript started.");
         return true;
       }
     }
+
+    // Method 2: Check h2 headings containing "Discover more" (new situation with heading structure)
+    const headings = cell.querySelectorAll('h2[role="heading"]');
+    for (const heading of headings) {
+      const text = heading.textContent || "";
+      if (text.trim().toLowerCase().includes(DISCOVER_TEXT)) {
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -63,6 +74,7 @@ logger("Userscript started.");
   }
   window.__twitterRemoveDiscoverMoreInitialized = true;
 
+  // Observe both main element and document body for virtualized lists
   waitForElement("main", (mainEl) => {
     hideDiscoverMoreAndFollowing();
 
@@ -73,5 +85,8 @@ logger("Userscript started.");
     });
 
     observer.observe(mainEl, { childList: true, subtree: true });
+
+    // Also observe body for absolutely positioned virtualized list cells
+    observer.observe(document.body, { childList: true, subtree: true });
   });
 })();
