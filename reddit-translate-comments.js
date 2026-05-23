@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Translate Comments
 // @namespace    http://tampermonkey.net/
-// @version      0.1.1
+// @version      0.1.2
 // @description  Add a translate button to Reddit comments that translates foreign language comments to English
 // @include      *://reddit.com/*
 // @include      *://*.reddit.com/*
@@ -246,14 +246,28 @@
   }
 
   /**
+   * Hide the award action in the comment action row
+   * @param {ShadowRoot} shadowRoot - The shadow root of the action row component
+   */
+  function hideAwardAction(shadowRoot) {
+    const awardSlot = shadowRoot.querySelector('slot[name="comment-award"]');
+    if (!awardSlot) {
+      return;
+    }
+
+    awardSlot.style.display = "none";
+
+    const assignedNodes = awardSlot.assignedElements({ flatten: true });
+    assignedNodes.forEach((node) => {
+      node.style.display = "none";
+    });
+  }
+
+  /**
    * Process a single comment element
    * @param {Element} comment - The shreddit-comment element
    */
   function processComment(comment) {
-    if (comment.getAttribute(PROCESSED_MARKER) === "true") {
-      return;
-    }
-
     // Find the action row component (shreddit-comment-action-row)
     const actionRowComponent = comment.querySelector(ACTION_ROW_COMPONENT_SELECTOR);
     if (!actionRowComponent) {
@@ -263,6 +277,13 @@
     // Access the shadow root to insert into the correct location
     const shadowRoot = actionRowComponent.shadowRoot;
     if (!shadowRoot) {
+      return;
+    }
+
+    // Always hide award action even for already-processed comments
+    hideAwardAction(shadowRoot);
+
+    if (comment.getAttribute(PROCESSED_MARKER) === "true") {
       return;
     }
 
