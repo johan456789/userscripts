@@ -2,7 +2,7 @@
 // @name                    Jump to DeepWiki from Github
 // @name:zh-CN              Github 跳转至 DeepWiki
 // @namespace               http://tampermonkey.net/
-// @version                 0.2.3
+// @version                 0.2.4
 // @description             Add an anchor to jump to DeepWiki from Github
 // @description:zh-CN       在 Github 页面添加一个链接，跳转至 DeepWiki
 // @match                   *://github.com/*
@@ -19,8 +19,7 @@ const logger = Logger("[Github-DeepWiki]");
 const DESKTOP_README_LINK_SELECTOR = '.hide-sm.hide-md a[href="#readme-ov-file"]';
 const MOBILE_META_CONTAINER_SELECTOR = '#responsive-meta-container .d-block.d-md-none.mb-2';
 
-const labelText = ' DeepWiki'; // must have a space to make it aligned. github is weird.
-// const labelText = 'DeepWiki'; // with refined github extension enabled, it's aligned. 2026-02-28 UPDATE: no longer true.
+const labelText = 'DeepWiki';
 
 const PLACEMENTS = [
     {
