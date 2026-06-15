@@ -5,84 +5,393 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.1.7
-// @updateURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
-// @downloadURL  https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
+// @version        1.2.6
+// @run-at         document-end
+// @require        https://github.com/johan456789/userscripts/raw/main/utils/logger.js
+// @updateURL      https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
+// @downloadURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
 
 // 2025-06-26 modified from https://greasyfork.org/en/scripts/10731-wikipedia-rearrange-other-languages
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Configuration
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
+(function () {
+  "use strict";
 
-/**
- * Set your preferred languages here in order of priority
- * @type {string[]}
- */
-const myLangs = [
-  "en",
-  "simple",
-  "zh",
-  "zh-classical",
-  "ja",
-  "es",
-  "pt",
-  "fr",
-  "ar",
-  "ru",
-];
+  const logger = Logger("[Wikipedia-Rearrange-Languages]");
 
-/**
- * Setting false will leave other languages in the list
- * @type {boolean}
- */
-const removeOthers = true;
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  // Configuration
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  /**
+   * Set your preferred languages here in order of priority
+   * @type {string[]}
+   */
+  const myLangs = [
+    "en",
+    "simple",
+    "zh",
+    "zh-classical",
+    "ja",
+    "es",
+    "pt",
+    "fr",
+    "ar",
+    "ru",
+  ];
 
-// Locate the sidebar that contains the language links (id="p-lang").
-const pLang = window.document.querySelector("div#p-lang");
-if (pLang == null) return; // exit early
-const langs = pLang.querySelectorAll("div > ul > li");
+  /**
+   * Setting false will leave other languages in the list
+   * @type {boolean}
+   */
+  const removeOthers = true;
 
-// Remember the first <li> so we can easily insert other nodes before it later.
-let first = langs[0];
-const ul = first.parentNode;
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Build a sparse array that will hold the DOM nodes for each preferred language,
-// indexed by their priority in the myLangs list.
-const found = [];
-for (let i = 0; i < langs.length; i++) {
-  const lncn = langs[i].className;
-  const l1 = lncn.replace(/^.*interwiki-(\S+).*$/, "$1");
+  const VECTOR_2022_MENU_SELECTOR =
+    "body > div.grid.uls-menu.notheme.skin-invert > div.row.uls-language-list.uls-lcd";
+  const VECTOR_2022_SIDEBAR_SELECTOR =
+    "#content .vector-column-end .vector-sticky-pinned-container";
+  const VECTOR_2022_FIRST_SECTION_SELECTOR =
+    ":scope > nav.vector-page-tools-landmark, :scope > nav.vector-appearance-landmark";
+  const VECTOR_2022_PORTLET_ID = "p-lang-userscript";
+  const VECTOR_2022_STYLE_ID = "wikipedia-rearrange-languages-style";
+  const VECTOR_2022_BODY_CLASS =
+    "wikipedia-rearrange-languages-vector-2022";
+  const VECTOR_2022_CAPTURING_CLASS =
+    "wikipedia-rearrange-languages-capturing";
+  const OPEN_RETRY_DELAY_MS = 500;
+  const MAX_OPEN_ATTEMPTS = 20;
 
-  const ln = myLangs.indexOf(l1);
-  if (ln > -1) {
-    found[ln] = langs[i];
-  }
-}
+  init().catch((error) => {
+    logger.error("Initialization failed.", error);
+  });
 
-// Traverse the 'found' array backwards so languages earlier in 'myLangs'
-// end up closest to the top of the list.
-let foundCount = 0;
-for (let i = found.length - 1; i >= 0; i--) {
-  if (found[i]) {
-    ul.insertBefore(found[i], first);
-    first = found[i];
-    foundCount++;
-  }
-}
+  async function init() {
+    const legacyPortlet = document.querySelector("#p-lang");
+    if (legacyPortlet) {
+      rearrangeLegacyLanguages(legacyPortlet);
+      return;
+    }
 
-// If 'removeOthers' is true, prune any languages that weren't in 'myLangs';
-// otherwise, leave them in place.
-if (removeOthers) {
-  if (foundCount == 0) {
-    // remove "other languages" menu if empty
-    pLang.parentNode.removeChild(pLang);
-  } else {
-    while (ul.children.length > foundCount) {
-      ul.removeChild(ul.children[foundCount]);
+    const languageButton = document.querySelector("#p-lang-btn-checkbox");
+    if (languageButton) {
+      await addVector2022Languages(languageButton);
     }
   }
-}
+
+  function rearrangeLegacyLanguages(portlet) {
+    // Locate the list inside the legacy language portlet (id="p-lang").
+    const list = portlet.querySelector(".vector-menu-content-list, ul");
+    if (!list) {
+      return;
+    }
+
+    const items = Array.from(list.children).filter((item) =>
+      item.matches("li.interlanguage-link")
+    );
+
+    // Put preferred languages first, following the order configured in myLangs.
+    const preferred = sortPreferredItems(items);
+
+    if (removeOthers && preferred.length === 0) {
+      // Remove the "other languages" menu if no preferred language is available.
+      portlet.remove();
+      return;
+    }
+
+    // If removeOthers is false, preserve non-preferred languages after the
+    // reordered preferred languages.
+    const itemsToShow = removeOthers
+      ? preferred
+      : preferred.concat(items.filter((item) => !preferred.includes(item)));
+
+    list.replaceChildren(...itemsToShow);
+  }
+
+  async function addVector2022Languages(languageButton) {
+    const sidebar = document.querySelector(VECTOR_2022_SIDEBAR_SELECTOR);
+    if (!sidebar) {
+      logger.warn("Vector 2022 sidebar was not found.");
+      return;
+    }
+
+    injectVector2022Styles();
+    document.body.classList.add(VECTOR_2022_CAPTURING_CLASS);
+
+    try {
+      const menu = await openLanguageMenu(languageButton);
+      if (!menu) {
+        logger.warn("Could not open the Vector 2022 language menu.");
+        return;
+      }
+
+      const languageGroups = readLanguageGroups(menu);
+      languageButton.click();
+      await delay(OPEN_RETRY_DELAY_MS);
+
+      if (languageGroups.length === 0) {
+        logger.warn(
+          "The Vector 2022 language menu contained no usable languages."
+        );
+        return;
+      }
+
+      insertLanguagePortlet(sidebar, languageGroups);
+      logger("Inserted Vector 2022 language portlet.");
+    } finally {
+      // Restore normal ULS behavior after the automated capture is complete.
+      document.body.classList.remove(VECTOR_2022_CAPTURING_CLASS);
+    }
+  }
+
+  async function openLanguageMenu(languageButton) {
+    for (let attempt = 1; attempt <= MAX_OPEN_ATTEMPTS; attempt++) {
+      const existingMenu = document.querySelector(VECTOR_2022_MENU_SELECTOR);
+      if (existingMenu) {
+        return existingMenu;
+      }
+
+      logger(`Opening language menu (attempt ${attempt}/${MAX_OPEN_ATTEMPTS}).`);
+      languageButton.click();
+
+      // The first click can happen before Wikipedia finishes wiring up ULS.
+      // Retry until the menu's language list is actually present in the DOM.
+      await delay(OPEN_RETRY_DELAY_MS);
+
+      const menu = document.querySelector(VECTOR_2022_MENU_SELECTOR);
+      if (menu) {
+        return menu;
+      }
+    }
+
+    return null;
+  }
+
+  function readLanguageGroups(menu) {
+    const officialGroups = [];
+
+    // Convert the transient ULS menu into plain data. Do not retain or clone
+    // nodes that Wikipedia removes when the menu closes.
+    for (const section of menu.querySelectorAll(
+      ":scope > .uls-lcd-region-section:not(.hide)"
+    )) {
+      const heading = section.querySelector(".uls-lcd-region-title");
+      if (!heading) {
+        continue;
+      }
+
+      const languages = Array.from(
+        section.querySelectorAll(".uls-language-block li.interlanguage-link")
+      )
+        .map(readLanguage)
+        .filter(Boolean);
+
+      if (languages.length > 0) {
+        officialGroups.push({
+          title: heading.textContent.trim(),
+          languages,
+        });
+      }
+    }
+
+    const preferredLanguages = getPreferredLanguages(officialGroups);
+    return preferredLanguages.length > 0
+      ? [
+          {
+            title: "Preferred languages",
+            languages: preferredLanguages,
+          },
+          ...officialGroups,
+        ]
+      : officialGroups;
+  }
+
+  function readLanguage(item) {
+    const link = item.querySelector("a");
+    if (!link) {
+      return null;
+    }
+
+    return {
+      code: item.dataset.code || getLanguageCode(item),
+      name: link.textContent.trim(),
+      href: link.href,
+      title: link.title,
+      lang: link.lang,
+      dir: link.dir,
+      hreflang: link.hreflang,
+    };
+  }
+
+  function insertLanguagePortlet(sidebar, groups) {
+    document.querySelector(`#${VECTOR_2022_PORTLET_ID}`)?.remove();
+    document.body.classList.add(VECTOR_2022_BODY_CLASS);
+    injectVector2022Styles();
+
+    const nav = document.createElement("nav");
+    nav.id = VECTOR_2022_PORTLET_ID;
+    nav.className = "vector-language-landmark";
+    nav.setAttribute("aria-label", "Languages");
+
+    const pinnedContainer = document.createElement("div");
+    pinnedContainer.className = "vector-pinned-container";
+
+    const pinnableElement = document.createElement("div");
+    pinnableElement.className = "vector-language vector-pinnable-element";
+
+    const header = document.createElement("div");
+    header.className =
+      "vector-pinnable-header vector-language-pinnable-header vector-pinnable-header-pinned";
+
+    const headerLabel = document.createElement("div");
+    headerLabel.className = "vector-pinnable-header-label";
+    headerLabel.textContent = "Languages";
+    header.appendChild(headerLabel);
+    pinnableElement.appendChild(header);
+
+    for (const group of groups) {
+      pinnableElement.appendChild(createLanguageGroup(group));
+    }
+
+    pinnedContainer.appendChild(pinnableElement);
+    nav.appendChild(pinnedContainer);
+
+    // Languages should be the first section in the Vector 2022 end sidebar.
+    const firstSection = sidebar.querySelector(
+      VECTOR_2022_FIRST_SECTION_SELECTOR
+    );
+    sidebar.insertBefore(nav, firstSection);
+  }
+
+  function createLanguageGroup(group) {
+    const portlet = document.createElement("div");
+    portlet.className = "vector-menu mw-portlet vector-language-region";
+
+    const heading = document.createElement("div");
+    heading.className = "vector-menu-heading";
+    heading.textContent = group.title;
+    portlet.appendChild(heading);
+
+    const content = document.createElement("div");
+    content.className = "vector-menu-content";
+
+    const list = document.createElement("ul");
+    list.className = "vector-menu-content-list";
+
+    for (const language of group.languages) {
+      const item = document.createElement("li");
+      item.className = `interlanguage-link interwiki-${language.code} mw-list-item`;
+
+      const link = document.createElement("a");
+      link.textContent = language.name;
+      link.href = language.href;
+      setOptionalAttribute(link, "title", language.title);
+      setOptionalAttribute(link, "lang", language.lang);
+      setOptionalAttribute(link, "dir", language.dir);
+      setOptionalAttribute(link, "hreflang", language.hreflang);
+
+      item.appendChild(link);
+      list.appendChild(item);
+    }
+
+    content.appendChild(list);
+    portlet.appendChild(content);
+    return portlet;
+  }
+
+  function sortPreferredItems(items) {
+    const byCode = new Map(items.map((item) => [getLanguageCode(item), item]));
+    return myLangs.map((code) => byCode.get(code)).filter(Boolean);
+  }
+
+  function getPreferredLanguages(groups) {
+    const byCode = new Map();
+    for (const group of groups) {
+      for (const language of group.languages) {
+        if (!byCode.has(language.code)) {
+          byCode.set(language.code, language);
+        }
+      }
+    }
+
+    return myLangs.map((code) => byCode.get(code)).filter(Boolean);
+  }
+
+  function getLanguageCode(item) {
+    const match = item.className.match(/(?:^|\s)interwiki-([^\s]+)/);
+    return match ? match[1] : "";
+  }
+
+  function setOptionalAttribute(element, name, value) {
+    if (value) {
+      element.setAttribute(name, value);
+    }
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  function injectVector2022Styles() {
+    if (document.querySelector(`#${VECTOR_2022_STYLE_ID}`)) {
+      return;
+    }
+
+    const style = document.createElement("style");
+    style.id = VECTOR_2022_STYLE_ID;
+    style.textContent = `
+      @media (min-width: 1120px) {
+        .${VECTOR_2022_BODY_CLASS} .mw-body {
+          column-gap: 24px;
+        }
+
+        .${VECTOR_2022_BODY_CLASS} .vector-column-end {
+          width: 12.25rem;
+        }
+      }
+
+      @media (min-width: 1680px) {
+        .${VECTOR_2022_BODY_CLASS} .vector-column-end {
+          width: 15.5rem;
+        }
+      }
+
+      body.${VECTOR_2022_CAPTURING_CLASS} > div.grid.uls-menu {
+        visibility: hidden !important;
+      }
+
+      #${VECTOR_2022_PORTLET_ID},
+      #${VECTOR_2022_PORTLET_ID} .vector-pinned-container,
+      #${VECTOR_2022_PORTLET_ID} .vector-pinnable-element,
+      #${VECTOR_2022_PORTLET_ID} .vector-language-region,
+      #${VECTOR_2022_PORTLET_ID} .vector-menu-content,
+      #${VECTOR_2022_PORTLET_ID} .vector-menu-content-list {
+        display: block;
+        clear: both;
+        width: auto;
+      }
+
+      #${VECTOR_2022_PORTLET_ID} .vector-menu-content-list {
+        margin: 0;
+        padding: 0;
+      }
+
+      #${VECTOR_2022_PORTLET_ID} .vector-menu-content-list > .mw-list-item {
+        display: block;
+        float: none;
+        text-align: left;
+        width: auto;
+      }
+
+      #${VECTOR_2022_PORTLET_ID} .vector-menu-content-list > .mw-list-item > a {
+        display: block;
+        text-align: left;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+})();
