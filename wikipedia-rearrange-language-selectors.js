@@ -5,7 +5,7 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.2.6
+// @version        1.2.7
 // @run-at         document-end
 // @require        https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL      https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
@@ -117,6 +117,25 @@
     }
 
     injectVector2022Styles();
+    document.body.classList.add(VECTOR_2022_BODY_CLASS);
+
+    // The basic interlanguage links already exist in #p-lang-btn. Render the
+    // preferred group immediately so the sidebar width is reserved before ULS
+    // finishes loading its grouped language menu.
+    const preferredLanguages = readPreferredLanguagesFromButton(
+      languageButton.closest("#p-lang-btn")
+    );
+    const initialGroups =
+      preferredLanguages.length > 0
+        ? [
+            {
+              title: "Preferred languages",
+              languages: preferredLanguages,
+            },
+          ]
+        : [];
+    insertLanguagePortlet(sidebar, initialGroups);
+
     document.body.classList.add(VECTOR_2022_CAPTURING_CLASS);
 
     try {
@@ -137,8 +156,8 @@
         return;
       }
 
-      insertLanguagePortlet(sidebar, languageGroups);
-      logger("Inserted Vector 2022 language portlet.");
+      updateLanguagePortlet(languageGroups);
+      logger("Updated Vector 2022 language portlet.");
     } finally {
       // Restore normal ULS behavior after the automated capture is complete.
       document.body.classList.remove(VECTOR_2022_CAPTURING_CLASS);
@@ -224,10 +243,29 @@
     };
   }
 
+  function readPreferredLanguagesFromButton(portlet) {
+    if (!portlet) {
+      return [];
+    }
+
+    const languages = Array.from(
+      portlet.querySelectorAll(
+        ".vector-menu-content-list li.interlanguage-link"
+      )
+    )
+      .map(readLanguage)
+      .filter(Boolean);
+    return getPreferredLanguages([{ languages }]);
+  }
+
   function insertLanguagePortlet(sidebar, groups) {
-    document.querySelector(`#${VECTOR_2022_PORTLET_ID}`)?.remove();
-    document.body.classList.add(VECTOR_2022_BODY_CLASS);
-    injectVector2022Styles();
+    const existingPortlet = document.querySelector(
+      `#${VECTOR_2022_PORTLET_ID}`
+    );
+    if (existingPortlet) {
+      updateLanguagePortlet(groups);
+      return;
+    }
 
     const nav = document.createElement("nav");
     nav.id = VECTOR_2022_PORTLET_ID;
@@ -250,9 +288,7 @@
     header.appendChild(headerLabel);
     pinnableElement.appendChild(header);
 
-    for (const group of groups) {
-      pinnableElement.appendChild(createLanguageGroup(group));
-    }
+    renderLanguageGroups(pinnableElement, groups);
 
     pinnedContainer.appendChild(pinnableElement);
     nav.appendChild(pinnedContainer);
@@ -262,6 +298,27 @@
       VECTOR_2022_FIRST_SECTION_SELECTOR
     );
     sidebar.insertBefore(nav, firstSection);
+  }
+
+  function updateLanguagePortlet(groups) {
+    const pinnableElement = document.querySelector(
+      `#${VECTOR_2022_PORTLET_ID} .vector-pinnable-element`
+    );
+    if (!pinnableElement) {
+      return;
+    }
+
+    renderLanguageGroups(pinnableElement, groups);
+  }
+
+  function renderLanguageGroups(pinnableElement, groups) {
+    pinnableElement
+      .querySelectorAll(":scope > .vector-language-region")
+      .forEach((region) => region.remove());
+
+    for (const group of groups) {
+      pinnableElement.appendChild(createLanguageGroup(group));
+    }
   }
 
   function createLanguageGroup(group) {
