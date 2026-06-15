@@ -5,7 +5,7 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.2.7
+// @version        1.2.8
 // @run-at         document-end
 // @require        https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL      https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
@@ -45,6 +45,13 @@
    * @type {boolean}
    */
   const removeOthers = true;
+
+  /**
+   * Setting true will only show the first official Wikipedia language group
+   * after the custom "Preferred languages" group.
+   * @type {boolean}
+   */
+  const hideOtherLanguageGroups = true;
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -215,15 +222,19 @@
     }
 
     const preferredLanguages = getPreferredLanguages(officialGroups);
+    const officialGroupsToShow = hideOtherLanguageGroups
+      ? officialGroups.slice(0, 1)
+      : officialGroups;
+
     return preferredLanguages.length > 0
       ? [
           {
             title: "Preferred languages",
             languages: preferredLanguages,
           },
-          ...officialGroups,
+          ...officialGroupsToShow,
         ]
-      : officialGroups;
+      : officialGroupsToShow;
   }
 
   function readLanguage(item) {
