@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Maps Language Selector
 // @namespace    http://tampermonkey.net/
-// @version      1.1.3
+// @version      1.1.5
 // @description  Adds a language selector button to Google Maps.
 // @author       You
 // @match        https://www.google.com/maps*
@@ -109,10 +109,11 @@
     "zh-TW": "\u202A繁體中文\u202C",
   };
 
-  const CONTAINER_SELECTOR = "#gb > div";
-  // Only Tc0rEd Zf54rc are required for the white squircle background. Center icon via inline flex styles.
+  const CONTAINER_SELECTOR = "#gb [data-ogsr-up], #gb > div";
+  const BUTTON_ID = "google-maps-language-selector-button";
+  // Only Tc0rEd Zf54rc are required for the white squircle background.
   const BUTTON_WRAPPER_HTML =
-    '<div class="gb_z gb_td gb_Pf gb_0"><button class="Tc0rEd Zf54rc" style="display:flex;align-items:center;justify-content:center"><span class="google-symbols" style="font-size: 18px; line-height: 1;"></span></button></div>';
+    '<div id="google-maps-language-selector-button"><button class="Tc0rEd Zf54rc" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:20px;background:#fff;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px 1px rgba(60,64,67,.15)"><span class="google-symbols" style="font-size: 18px; line-height: 1;"></span></button></div>';
 
   function getCurrentHlParam() {
     try {
@@ -131,9 +132,16 @@
     const wrapper = document.createElement("div");
     wrapper.innerHTML = BUTTON_WRAPPER_HTML;
     const element = wrapper.firstElementChild;
-    // Make wrapper a positioning context so the dropdown can overlay without shifting layout
     if (element && element.style) {
       element.style.position = "relative";
+      element.style.display = "flex";
+      element.style.alignItems = "center";
+      element.style.justifyContent = "center";
+      element.style.flex = "0 0 auto";
+      element.style.width = "40px";
+      element.style.height = "40px";
+      element.style.marginLeft = "8px";
+      element.style.zIndex = "2147483646";
     }
     const button = element.querySelector("button");
     if (button) {
@@ -142,10 +150,10 @@
     }
 
     // Create a native <select> that we will open programmatically.
-    // Keep it visually hidden and absolutely positioned so it does not affect layout.
+    // Keep it visually hidden and fixed so it is not clipped by Google's top bar.
     const select = document.createElement("select");
     select.setAttribute("aria-label", "Choose language");
-    select.style.position = "absolute";
+    select.style.position = "fixed";
     select.style.top = "0";
     select.style.left = "0";
     select.style.opacity = "0";
@@ -223,16 +231,13 @@
           } else {
             select.value = "";
           }
-          // Place the select over the button to avoid layout shift
+          // Anchor the native picker to the button. With showPicker, browsers use the
+          // select's box as the popup origin, so keep it exactly over the button.
           const rect = button.getBoundingClientRect();
-          const parentRect = element.getBoundingClientRect();
-          const GAP_PX = 8; // small visual gap between button and list
-          const topWithinParent = rect.top - parentRect.top;
-          const left = rect.left - parentRect.left;
-          // Anchor the picker just below the button
-          select.style.top = topWithinParent + rect.height + GAP_PX + "px";
-          select.style.left = left + "px";
-          select.style.minWidth = rect.width + "px";
+          select.style.top = rect.top + "px";
+          select.style.left = rect.left + "px";
+          select.style.width = rect.width + "px";
+          select.style.height = rect.height + "px";
 
           // Enable interactions
           select.style.pointerEvents = "auto";
@@ -249,10 +254,11 @@
           } else {
             // Fallback: display a sized list positioned under the button
             select.size = Math.min(ENABLED_LANGUAGES.length, 10);
+            select.style.top = rect.bottom + 8 + "px";
+            select.style.width = "220px";
+            select.style.height = "auto";
             select.style.opacity = "1";
             select.style.pointerEvents = "auto";
-            // Position list just below the button (same gap)
-            select.style.top = topWithinParent + rect.height + GAP_PX + "px";
             // Hide it again when it loses focus
             const hide = () => {
               select.removeEventListener("blur", hide);
@@ -282,25 +288,41 @@
     return element;
   }
 
+  function insertButton(container, buttonEl) {
+    const profileButton =
+      container.querySelector('a[aria-label*="Google Account"]') ||
+      container.querySelector('a[href*="SignOutOptions"]') ||
+      container.querySelector("img.gbii")?.closest("a");
+
+    if (profileButton) {
+      let insertionTarget = profileButton;
+      while (insertionTarget.parentElement && insertionTarget.parentElement !== container) {
+        insertionTarget = insertionTarget.parentElement;
+      }
+      insertionTarget.insertAdjacentElement("afterend", buttonEl);
+      logger("Language selector inserted after the profile button.");
+      return;
+    }
+
+    container.appendChild(buttonEl);
+    logger("Language selector inserted in the account controls.");
+  }
+
   waitForElement(
     CONTAINER_SELECTOR,
     (container) => {
       logger("Container found:", container);
+      if (document.getElementById(BUTTON_ID)) {
+        logger("Language selector already inserted.");
+        return;
+      }
       const buttonEl = createButtonElement();
       if (!buttonEl) {
         logger.error("Failed to create button element.");
         return;
       }
 
-      const firstItem = container.firstElementChild;
-      if (firstItem && firstItem.nextSibling) {
-        container.insertBefore(buttonEl, firstItem.nextSibling);
-      } else if (firstItem) {
-        container.appendChild(buttonEl);
-      } else {
-        container.appendChild(buttonEl);
-      }
-      logger("Language selector inserted after the first item.");
+      insertButton(container, buttonEl);
     },
     10000
   );
