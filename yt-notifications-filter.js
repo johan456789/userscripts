@@ -5,7 +5,7 @@
 // @grant        none
 // @run-at       document-end
 // @noframes
-// @version      0.1.4
+// @version      0.1.5
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-notifications-filter.js
@@ -39,6 +39,7 @@ const FILTERS = [
 ];
 
 let currentFilterId = "videos";
+const authorCache = {};
 const OBSERVER_DEBOUNCE_MS = 100;
 const OBSERVER_MAX_WAIT_MS = 500;
 
@@ -108,6 +109,7 @@ const OBSERVER_MAX_WAIT_MS = 500;
     const items = Array.from(menu.querySelectorAll(SELECTORS.notificationItem));
     items.forEach((item) => {
       simplifyNotificationMessage(item);
+      enrichWithAuthor(item);
       const type = getNotificationType(item);
       item.style.display = filter.matches(type) ? "" : "none";
     });
@@ -146,6 +148,48 @@ const OBSERVER_MAX_WAIT_MS = 500;
     ).some((item) => item.style.display !== "none");
 
     return { title, hasVisibleItems };
+  }
+
+  function getVideoId(item) {
+    const link = item.querySelector("a[href]");
+    if (!link) return null;
+    const href = link.getAttribute("href") || "";
+    const match = href.match(/\/(?:watch\?v=|shorts\/)([a-zA-Z0-9_-]{11})/);
+    return match ? match[1] : null;
+  }
+
+  async function enrichWithAuthor(item) {
+    if (item.dataset.authorEnriched) return;
+
+    const videoId = getVideoId(item);
+    if (!videoId) return;
+
+    const metadata = item.querySelector(
+      ".metadata.style-scope.ytd-notification-renderer",
+    );
+    if (!metadata) return;
+
+    const timeElement = metadata.querySelectorAll("yt-formatted-string")[1];
+    if (!timeElement) return;
+
+    if (authorCache[videoId]) {
+      timeElement.textContent = `${authorCache[videoId]} | ${timeElement.textContent}`;
+      item.dataset.authorEnriched = "true";
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      authorCache[videoId] = data.author_name;
+      timeElement.textContent = `${data.author_name} | ${timeElement.textContent}`;
+      item.dataset.authorEnriched = "true";
+    } catch (_err) {
+      logger("Failed to fetch author for " + videoId);
+    }
   }
 
   function simplifyNotificationMessage(item) {
