@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name                    DeepWiki Search Tab Title
 // @namespace               http://tampermonkey.net/
-// @version                 0.1.1
-// @description             Change DeepWiki tab title to "{repo_name} | {question}"
+// @version                 0.1.2
+// @description             Change DeepWiki tab title to "{repo_name} | {question}" with middle truncation for long repo names
 // @match                   https://deepwiki.com/*
 // @require                 https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require                 https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
@@ -56,6 +56,15 @@
         return lastQuestion;
     }
 
+    function truncateMiddle(str, maxLength = 10) {
+        if (str.length <= maxLength) return str;
+        const ellipsis = '\u2026';
+        const charsToShow = maxLength - 1;
+        const frontChars = Math.ceil(charsToShow / 2);
+        const backChars = Math.floor(charsToShow / 2);
+        return str.substring(0, frontChars) + ellipsis + str.substring(str.length - backChars);
+    }
+
     function getQuestion() {
         const container = document.querySelector(QUESTION_CONTAINER_SELECTOR);
         if (!container) return getQuestionFromSearchInput();
@@ -87,7 +96,8 @@
         const question = getQuestion();
 
         if (repoName && question) {
-            const newTitle = `${repoName} | ${question}`;
+            const truncatedRepoName = truncateMiddle(repoName);
+            const newTitle = `${truncatedRepoName} | ${question}`;
             if (document.title !== newTitle) {
                 document.title = newTitle;
                 logger(`Updated title to: ${newTitle}`);
