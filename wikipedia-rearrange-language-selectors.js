@@ -5,7 +5,7 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.3.3
+// @version        1.4.0
 // @run-at         document-end
 // @require        https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL      https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
@@ -129,6 +129,30 @@
     list.replaceChildren(...itemsToShow);
   }
 
+  function waitForStableDOM(element, debounceMs, timeoutMs) {
+    return new Promise((resolve) => {
+      let done = false;
+      let timer;
+
+      function finish() {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        observer.disconnect();
+        resolve();
+      }
+
+      const observer = new MutationObserver(() => {
+        clearTimeout(timer);
+        timer = setTimeout(finish, debounceMs);
+      });
+      observer.observe(element, { childList: true, subtree: true });
+
+      timer = setTimeout(finish, debounceMs);
+      setTimeout(finish, timeoutMs);
+    });
+  }
+
   async function addVector2022Languages(languageButton) {
     const sidebar = document.querySelector(VECTOR_2022_SIDEBAR_SELECTOR);
     if (!sidebar) {
@@ -168,6 +192,7 @@
         return;
       }
 
+      await waitForStableDOM(menu, 300, 5000);
       const languageGroups = readLanguageGroups(menu);
       languageButton.click();
       await delay(50);
@@ -187,13 +212,10 @@
   }
 
   function readLanguageGroups(menu) {
-    const officialGroups = [];
+    const suggestedLanguages = [];
+    const allLanguages = [];
 
     for (const section of menu.querySelectorAll(".uls-rewrite__section")) {
-      const heading = section.querySelector(".uls-rewrite__section-title");
-      const sectionTitle =
-        heading?.textContent.trim() || "Other languages";
-
       const languages = Array.from(
         section.querySelectorAll(
           ".uls-rewrite__language-item.interlanguage-link"
@@ -202,28 +224,60 @@
         .map(readLanguage)
         .filter(Boolean);
 
-      if (languages.length > 0) {
-        officialGroups.push({
-          title: sectionTitle,
-          languages,
-        });
+      if (section.classList.contains("uls-rewrite__section--suggested")) {
+        suggestedLanguages.push(...languages);
+      } else {
+        allLanguages.push(...languages);
       }
     }
 
-    const preferredLanguages = getPreferredLanguages(officialGroups);
-    const officialGroupsToShow = hideOtherLanguageGroups
-      ? officialGroups.slice(0, 1)
-      : officialGroups;
+    const allByCode = new Map();
+    for (const lang of [...suggestedLanguages, ...allLanguages]) {
+      if (lang?.code && !allByCode.has(lang.code)) {
+        allByCode.set(lang.code, lang);
+      }
+    }
 
-    return preferredLanguages.length > 0
-      ? [
-          {
-            title: "Preferred languages",
-            languages: preferredLanguages,
-          },
-          ...officialGroupsToShow,
-        ]
-      : officialGroupsToShow;
+    const atReadItems = [...document.querySelectorAll(".uls-rewrite__section--all .uls-rewrite__language-item")];
+    const atReadCodes = new Set(atReadItems.map(el => (el.className.match(/(?:^|\s)interwiki-([^\s]+)/) || [])[1]));
+    const atReadBinary = myLangs.map((code) => (atReadCodes.has(code) ? "1" : "0")).join("");
+    logger(`All section AT READ: ${atReadItems.length} total, presence: ${atReadBinary}`);
+    const preferredLanguages = myLangs
+      .map((code) => allByCode.get(code))
+      .filter(Boolean);
+
+    const preferredCodes = new Set(preferredLanguages.map((l) => l.code));
+
+    const remainingSuggested = suggestedLanguages.filter(
+      (l) => !preferredCodes.has(l.code)
+    );
+
+    const suggestedCodes = new Set(suggestedLanguages.map((l) => l.code));
+    const remainingAll = allLanguages.filter(
+      (l) => !preferredCodes.has(l.code) && !suggestedCodes.has(l.code)
+    );
+
+    const groups = [];
+    if (preferredLanguages.length > 0) {
+      groups.push({
+        title: "Preferred languages",
+        languages: preferredLanguages,
+      });
+    }
+    if (remainingSuggested.length > 0) {
+      groups.push({
+        title: "Suggested languages",
+        languages: remainingSuggested,
+      });
+    }
+    if (remainingAll.length > 0 && !hideOtherLanguageGroups) {
+      groups.push({
+        title: "Other languages",
+        languages: remainingAll,
+      });
+    }
+
+    return groups;
   }
 
   function readLanguage(item) {
