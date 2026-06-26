@@ -5,28 +5,18 @@
 // @include        https://*.wikipedia.org/wiki/*
 // @include        https://zh.wikipedia.org/*/*
 // @description    Rearranges the "other languages" section of Wikipedia
-// @version        1.2.8
+// @version        1.3.3
 // @run-at         document-end
 // @require        https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL      https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // @downloadURL    https://github.com/johan456789/userscripts/raw/main/wikipedia-rearrange-language-selectors.js
 // ==/UserScript==
 
-// 2025-06-26 modified from https://greasyfork.org/en/scripts/10731-wikipedia-rearrange-other-languages
-
 (function () {
   "use strict";
 
   const logger = Logger("[Wikipedia-Rearrange-Languages]");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // Configuration
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  /**
-   * Set your preferred languages here in order of priority
-   * @type {string[]}
-   */
   const myLangs = [
     "en",
     "simple",
@@ -40,23 +30,10 @@
     "ru",
   ];
 
-  /**
-   * Setting false will leave other languages in the list
-   * @type {boolean}
-   */
   const removeOthers = true;
-
-  /**
-   * Setting true will only show the first official Wikipedia language group
-   * after the custom "Preferred languages" group.
-   * @type {boolean}
-   */
   const hideOtherLanguageGroups = true;
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  const VECTOR_2022_MENU_SELECTOR =
-    "body > div.grid.uls-menu.notheme.skin-invert > div.row.uls-language-list.uls-lcd";
+  const VECTOR_2022_MENU_SELECTOR = ".uls-rewrite";
   const VECTOR_2022_SIDEBAR_SELECTOR =
     "#content .vector-column-end .vector-sticky-pinned-container";
   const VECTOR_2022_FIRST_SECTION_SELECTOR =
@@ -67,14 +44,55 @@
     "wikipedia-rearrange-languages-vector-2022";
   const VECTOR_2022_CAPTURING_CLASS =
     "wikipedia-rearrange-languages-capturing";
-  const OPEN_RETRY_DELAY_MS = 500;
-  const MAX_OPEN_ATTEMPTS = 20;
+
+  function waitForElement(selector, timeoutMs) {
+    const existing = document.querySelector(selector);
+    if (existing) return Promise.resolve(existing);
+
+    return new Promise((resolve) => {
+      let done = false;
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector(selector);
+        if (el && !done) {
+          done = true;
+          observer.disconnect();
+          resolve(el);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      setTimeout(() => {
+        if (!done) {
+          done = true;
+          observer.disconnect();
+          resolve(null);
+        }
+      }, timeoutMs);
+
+      const poll = setInterval(() => {
+        const el = document.querySelector(selector);
+        if (el && !done) {
+          done = true;
+          observer.disconnect();
+          clearInterval(poll);
+          resolve(el);
+        }
+      }, 200);
+      setTimeout(() => clearInterval(poll), timeoutMs);
+    });
+  }
 
   init().catch((error) => {
     logger.error("Initialization failed.", error);
   });
 
   async function init() {
+    if (document.hidden) {
+      await new Promise((resolve) => {
+        document.addEventListener("visibilitychange", resolve, { once: true });
+      });
+    }
+
     const legacyPortlet = document.querySelector("#p-lang");
     if (legacyPortlet) {
       rearrangeLegacyLanguages(legacyPortlet);
@@ -88,7 +106,6 @@
   }
 
   function rearrangeLegacyLanguages(portlet) {
-    // Locate the list inside the legacy language portlet (id="p-lang").
     const list = portlet.querySelector(".vector-menu-content-list, ul");
     if (!list) {
       return;
@@ -98,17 +115,13 @@
       item.matches("li.interlanguage-link")
     );
 
-    // Put preferred languages first, following the order configured in myLangs.
     const preferred = sortPreferredItems(items);
 
     if (removeOthers && preferred.length === 0) {
-      // Remove the "other languages" menu if no preferred language is available.
       portlet.remove();
       return;
     }
 
-    // If removeOthers is false, preserve non-preferred languages after the
-    // reordered preferred languages.
     const itemsToShow = removeOthers
       ? preferred
       : preferred.concat(items.filter((item) => !preferred.includes(item)));
@@ -126,9 +139,6 @@
     injectVector2022Styles();
     document.body.classList.add(VECTOR_2022_BODY_CLASS);
 
-    // The basic interlanguage links already exist in #p-lang-btn. Render the
-    // preferred group immediately so the sidebar width is reserved before ULS
-    // finishes loading its grouped language menu.
     const preferredLanguages = readPreferredLanguagesFromButton(
       languageButton.closest("#p-lang-btn")
     );
@@ -146,7 +156,13 @@
     document.body.classList.add(VECTOR_2022_CAPTURING_CLASS);
 
     try {
-      const menu = await openLanguageMenu(languageButton);
+      let menu;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        languageButton.click();
+        menu = await waitForElement(VECTOR_2022_MENU_SELECTOR, 500);
+        if (menu) break;
+      }
+
       if (!menu) {
         logger.warn("Could not open the Vector 2022 language menu.");
         return;
@@ -154,7 +170,7 @@
 
       const languageGroups = readLanguageGroups(menu);
       languageButton.click();
-      await delay(OPEN_RETRY_DELAY_MS);
+      await delay(50);
 
       if (languageGroups.length === 0) {
         logger.warn(
@@ -166,56 +182,29 @@
       updateLanguagePortlet(languageGroups);
       logger("Updated Vector 2022 language portlet.");
     } finally {
-      // Restore normal ULS behavior after the automated capture is complete.
       document.body.classList.remove(VECTOR_2022_CAPTURING_CLASS);
     }
-  }
-
-  async function openLanguageMenu(languageButton) {
-    for (let attempt = 1; attempt <= MAX_OPEN_ATTEMPTS; attempt++) {
-      const existingMenu = document.querySelector(VECTOR_2022_MENU_SELECTOR);
-      if (existingMenu) {
-        return existingMenu;
-      }
-
-      logger(`Opening language menu (attempt ${attempt}/${MAX_OPEN_ATTEMPTS}).`);
-      languageButton.click();
-
-      // The first click can happen before Wikipedia finishes wiring up ULS.
-      // Retry until the menu's language list is actually present in the DOM.
-      await delay(OPEN_RETRY_DELAY_MS);
-
-      const menu = document.querySelector(VECTOR_2022_MENU_SELECTOR);
-      if (menu) {
-        return menu;
-      }
-    }
-
-    return null;
   }
 
   function readLanguageGroups(menu) {
     const officialGroups = [];
 
-    // Convert the transient ULS menu into plain data. Do not retain or clone
-    // nodes that Wikipedia removes when the menu closes.
-    for (const section of menu.querySelectorAll(
-      ":scope > .uls-lcd-region-section:not(.hide)"
-    )) {
-      const heading = section.querySelector(".uls-lcd-region-title");
-      if (!heading) {
-        continue;
-      }
+    for (const section of menu.querySelectorAll(".uls-rewrite__section")) {
+      const heading = section.querySelector(".uls-rewrite__section-title");
+      const sectionTitle =
+        heading?.textContent.trim() || "Other languages";
 
       const languages = Array.from(
-        section.querySelectorAll(".uls-language-block li.interlanguage-link")
+        section.querySelectorAll(
+          ".uls-rewrite__language-item.interlanguage-link"
+        )
       )
         .map(readLanguage)
         .filter(Boolean);
 
       if (languages.length > 0) {
         officialGroups.push({
-          title: heading.textContent.trim(),
+          title: sectionTitle,
           languages,
         });
       }
@@ -244,12 +233,15 @@
     }
 
     return {
-      code: item.dataset.code || getLanguageCode(item),
+      code:
+        item.dataset.languageCode ||
+        item.dataset.code ||
+        getLanguageCode(item),
       name: link.textContent.trim(),
       href: link.href,
       title: link.title,
-      lang: link.lang,
-      dir: link.dir,
+      lang: link.lang || item.lang,
+      dir: link.dir || item.dir,
       hreflang: link.hreflang,
     };
   }
@@ -304,7 +296,6 @@
     pinnedContainer.appendChild(pinnableElement);
     nav.appendChild(pinnedContainer);
 
-    // Languages should be the first section in the Vector 2022 end sidebar.
     const firstSection = sidebar.querySelector(
       VECTOR_2022_FIRST_SECTION_SELECTOR
     );
