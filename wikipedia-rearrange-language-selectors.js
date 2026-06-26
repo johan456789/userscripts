@@ -30,7 +30,9 @@
     "ru",
   ];
 
+  // Legacy sidebar: when true and no preferred langs are found, remove the language portlet entirely
   const removeOthers = true;
+  // Vector 2022 sidebar: when true, hide the "Other languages" group (Preferred and Suggested still shown)
   const hideOtherLanguageGroups = true;
 
   const VECTOR_2022_MENU_SELECTOR = ".uls-rewrite";
