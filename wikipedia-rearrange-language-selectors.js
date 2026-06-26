@@ -234,9 +234,9 @@
 
     return {
       code:
+        getLanguageCode(item) ||
         item.dataset.languageCode ||
-        item.dataset.code ||
-        getLanguageCode(item),
+        item.dataset.code,
       name: link.textContent.trim(),
       href: link.href,
       title: link.title,
