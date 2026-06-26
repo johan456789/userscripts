@@ -1,10 +1,14 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.1.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
+// @match        https://www.mobile01.com/*
+// @match        https://mobile01.com/*
+// @match        http://www.mobile01.com/*
+// @match        http://mobile01.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
@@ -25,6 +29,10 @@ const SITES = [
     match: /shopee\.tw/,
     selectors: ["#HomePagePopupBannerSection > div > div.e_KtkD.Xg_fY5 > div"],
   },
+  {
+    match: /mobile01\.com/,
+    selectors: ["#idle_content > button"],
+  },
 ];
 
 (function () {
@@ -37,6 +45,8 @@ const SITES = [
   }
 
   const { selectors } = site;
+
+  logger("Monitoring for overlay");
 
   function clickButton(el, sel) {
     logger(`Clicked close button: ${sel}`);
@@ -85,8 +95,4 @@ const SITES = [
     childList: true,
     subtree: true,
   });
-
-  setTimeout(() => {
-    observer.disconnect();
-  }, 15000);
 })();
