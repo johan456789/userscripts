@@ -474,7 +474,7 @@
         }
       }
 
-      body.${VECTOR_2022_CAPTURING_CLASS} > div.grid.uls-menu {
+      body.${VECTOR_2022_CAPTURING_CLASS} .uls-rewrite {
         visibility: hidden !important;
       }
 
