@@ -13,4 +13,5 @@ This repo is a collection of userscripts for various websites.
 - Naming convention for userscripts: `<website_name>-<userscript_name>.js`
 - Edit only one userscript only unless explicitly stated otherwise.
 - All userscripts should have a downloadURL and updateURL. Except for utility functions.
+- Do NOT add a `@license` field to userscripts unless explicitly asked to do so.
 - All userscripts inside `archive` folder should be archived and not updated.
