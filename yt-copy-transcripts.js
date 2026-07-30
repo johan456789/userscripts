@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.8
+// @version      2.3.9
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/yt-action-button.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
@@ -271,6 +271,16 @@ const cssText = `
   }
 
   function addTranscriptButton() {
+    const existing = document.getElementById(IDS.transcriptButton);
+    if (existing) {
+      // If the cached component still points at this exact element, reuse it.
+      if (transcriptButtonComponent?.button === existing) {
+        return existing;
+      }
+      // Otherwise the DOM button was re-mounted by YT; drop the stale
+      // component so the caller re-creates it against the live element.
+      transcriptButtonComponent = null;
+    }
     const topButtons = document.querySelector(SELECTORS.topButtons);
     if (!topButtons) {
       logger(SELECTORS.topButtons + " not found");
@@ -341,81 +351,89 @@ const cssText = `
     return button;
   }
 
-  function watchPageHandler() {
-    if (!window.location.href.includes("/watch")) {
-      logger(`not including /watch in url: ${window.location.href}`);
+  async function refreshTranscriptForCurrentVideo() {
+    const videoId = getVideoId();
+    if (!videoId) {
+      logger("No video id in URL; skipping transcript refresh");
       return;
     }
-    logger("running watchPageHandler");
-
-    // observe element load
-    const observer = new MutationObserver(async (mutations, observer) => {
-      logger("Observer callback fired");
-      const topButtons = document.querySelector(SELECTORS.topButtons);
-      const alreadyExists = document.getElementById(IDS.transcriptButton);
-      if (topButtons && !alreadyExists) {
-        observer.disconnect();
-        addTranscriptButton();
-
-        const pageRefreshHandler = async () => {
-          const videoId = getVideoId();
-          logger(
-            `updating transcript (in cache: ${transcriptCache.has(videoId)})`
-          );
-          // Set loading state while checking availability
-          updateButtonAppearance(transcriptButtonComponent, null);
-          let fullTranscript;
-          if (!transcriptCache.has(videoId)) {
-            fullTranscript = await prefetchTranscript(videoId);
-            if (fullTranscript) {
-              transcriptCache.set(videoId, fullTranscript);
-              logger("pageRefreshHandler: fetched transcript and cached");
-            } else {
-              logger("pageRefreshHandler: failed to fetch transcript");
-            }
-          } else {
-            logger("pageRefreshHandler: transcript already cached");
-          }
-          const isAvailable = transcriptCache.has(videoId);
-          updateButtonAppearance(transcriptButtonComponent, isAvailable);
-          logger("pageRefreshHandler: finished updating transcript");
-        };
-        await pageRefreshHandler();
-        window.addEventListener("yt-navigate-finish", async () => {
-          logger("yt-navigate-finish detected, updating transcript");
-          await pageRefreshHandler();
-        });
+    logger(
+      `Updating transcript for ${videoId} (in cache: ${transcriptCache.has(videoId)})`
+    );
+    updateButtonAppearance(transcriptButtonComponent, null);
+    if (!transcriptCache.has(videoId)) {
+      const fullTranscript = await prefetchTranscript(videoId);
+      if (fullTranscript) {
+        transcriptCache.set(videoId, fullTranscript);
+        logger("Fetched transcript and cached");
+      } else {
+        logger("Failed to fetch transcript");
       }
-    });
+    } else {
+      logger("Transcript already cached");
+    }
+    const isAvailable = transcriptCache.has(videoId);
+    updateButtonAppearance(transcriptButtonComponent, isAvailable);
+    logger("Finished updating transcript");
+  }
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+  function isWatchPage() {
+    return window.location.pathname === "/watch";
+  }
+
+  function ensureTranscriptButton() {
+    if (!isWatchPage()) {
+      return;
+    }
+    const button = addTranscriptButton();
+    if (button) {
+      // Cheap path: if we just (re)created the component, refresh its state
+      // for the current video. The yt-navigate-finish handler covers the
+      // SPA-navigation case.
+      if (
+        transcriptButtonComponent &&
+        transcriptButtonComponent.button === button &&
+        !button.dataset.ytTranscriptInitialized
+      ) {
+        button.dataset.ytTranscriptInitialized = "1";
+        refreshTranscriptForCurrentVideo();
+      }
+    }
   }
 
   function init() {
-    // Inject CSS
     const style = document.createElement("style");
-    const cssTextNode = document.createTextNode(cssText); // Create a TextNode with the CSS content
-    style.appendChild(cssTextNode); // Append the TextNode to the <style> element
+    const cssTextNode = document.createTextNode(cssText);
+    style.appendChild(cssTextNode);
     document.head.appendChild(style);
 
-    // Initial run
-    watchPageHandler();
+    // Single persistent top-level observer. document.documentElement is stable
+    // across YT SPA navigations, so we don't need to reattach on every
+    // navigation, and we don't leak observers either.
+    const observer = new MutationObserver(ensureTranscriptButton);
+    observer.observe(document.documentElement || document, {
+      childList: true,
+      subtree: true,
+    });
 
-    // Monitor URL changes
-    let lastUrl = window.location.href;
-    setInterval(() => {
-      // logger(`periodic check: href: ${window.location.href}, lastUrl: ${lastUrl}`);
-      if (window.location.href !== lastUrl) {
-        // url changed
-        logger("URL changed");
-        lastUrl = window.location.href;
-
-        watchPageHandler();
+    // Re-arm on YT's SPA navigation event: the page is now /watch with a
+    // new video id, so refresh the cached transcript.
+    window.addEventListener("yt-navigate-finish", () => {
+      if (!isWatchPage()) return;
+      const existing = document.getElementById(IDS.transcriptButton);
+      if (existing) delete existing.dataset.ytTranscriptInitialized;
+      // If the top row was re-mounted, addTranscriptButton will create a
+      // fresh component; otherwise the existing one is reused and the init
+      // flag reset above will let ensureTranscriptButton re-trigger the
+      // refresh on the next observer tick.
+      const button = addTranscriptButton();
+      if (button && !button.dataset.ytTranscriptInitialized) {
+        button.dataset.ytTranscriptInitialized = "1";
+        refreshTranscriptForCurrentVideo();
       }
-    }, 100); // check periodically
+    });
+
+    ensureTranscriptButton();
   }
 
   init();
