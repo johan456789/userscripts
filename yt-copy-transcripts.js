@@ -6,7 +6,7 @@
 // @license      MIT
 // @run-at       document-end
 // @noframes
-// @version      2.3.8
+// @version      2.3.10
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/yt-action-button.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-copy-transcripts.js
