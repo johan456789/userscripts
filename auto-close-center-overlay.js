@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.1.0
+// @version      1.2.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -9,6 +9,7 @@
 // @match        https://mobile01.com/*
 // @match        http://www.mobile01.com/*
 // @match        http://mobile01.com/*
+// @match        https://medium.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
@@ -32,6 +33,10 @@ const SITES = [
   {
     match: /mobile01\.com/,
     selectors: ["#idle_content > button"],
+  },
+  {
+    match: /medium\.com/,
+    selectors: ['button[data-testid="close-button"]'],
   },
 ];
 
