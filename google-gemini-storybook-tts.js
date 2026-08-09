@@ -48,7 +48,7 @@ const CONFIG = {
         displayName: "ElevenLabs",
         apiKeyStorageKey: "gemini_storybook_tts_elevenlabs_api_key",
         endpointType: "tts_with_timestamps",
-        voiceId: "JBFqnCBsd6RMkjVDRZzb",
+        voiceId: "JBFqnCBsd6RMkjVDRZzb", // on paid tier, g10k86KeEUyBqW9lcKYg is the better voice to use.
         outputFormat: "mp3_44100_128",
         modelId: "eleven_flash_v2_5",
         languageCode: "es",
