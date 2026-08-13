@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.6.0
+// @version      0.7.1
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -32,9 +32,9 @@ const CONFIG = {
   },
   selectors: {
     storyText:
-      "storybook > div > div.ng-star-inserted > storybook-page > div p.story-text",
+      "storybook > div > div.ng-star-inserted > storybook-page > div p.story-text, storybook-mobile ul.pages li.page p.story-text",
     currentStoryText:
-      "storybook > div > div.ng-star-inserted:not(.hide) > storybook-page.right > div:not(.underneath) p.story-text",
+      "storybook > div > div.ng-star-inserted:not(.hide) > storybook-page.right > div:not(.underneath) p.story-text, storybook-mobile ul.pages li.page p.story-text",
   },
   cache: {
     version: "v3",
@@ -1057,6 +1057,13 @@ const Playback = (() => {
 })();
 
 const UI = (() => {
+  function isMobileLayout() {
+    return (
+      window.matchMedia("(max-width: 959.98px)").matches ||
+      !!document.querySelector("storybook-mobile")
+    );
+  }
+
   function blockLeftClicks(container, exceptionEl) {
     if (!container || container.dataset.clickBlocked === "1") return;
     const handler = (e) => {
@@ -1190,11 +1197,15 @@ const UI = (() => {
     wrapper.style.padding = "8px 12px";
     wrapper.style.borderRadius = "18px";
     wrapper.style.background = "#F1F3F4";
-    wrapper.style.maxWidth = "50%";
     wrapper.style.width = "100%";
     wrapper.style.margin = "8px 0";
     wrapper.style.boxSizing = "border-box";
     wrapper.style.minWidth = "0";
+    if (isMobileLayout()) {
+      wrapper.style.maxWidth = "calc(100% - var(--gem-sys-spacing--xl)*2)";
+    } else {
+      wrapper.style.maxWidth = "50%";
+    }
 
     const playButton = document.createElement("button");
     playButton.className = "userscript-tts-play-button";
