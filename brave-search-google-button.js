@@ -2,7 +2,7 @@
 // @name           Brave Search - Search on Google button
 // @namespace      none
 // @description    Shows a "Search on Google instead" button right before the first search result on Brave Search.
-// @version        1.0.0
+// @version        1.1.0
 // @match          https://search.brave.com/*
 // @icon           https://search.brave.com/favicon.ico
 // @run-at         document-end
@@ -73,8 +73,7 @@
     link.id = BUTTON_ID;
     link.className = BUTTON_CLASS;
     link.href = googleUrl(query);
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
+
     link.title = `Search "${query}" on Google`;
     link.setAttribute("role", "button");
 
