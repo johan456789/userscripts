@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube PiP toggle button
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.1.0
 // @description  Adds a Picture-in-Picture toggle button to the YouTube player controls
 // @author       You
 // @match        https://www.youtube.com/*
@@ -31,31 +31,15 @@ const logger = Logger("[yt-pip-toggle]");
     svg.setAttribute("height", "24");
     svg.style.display = "block";
     svg.style.margin = "auto";
-    svg.style.transform = "scale(1.3333333)";
+    svg.style.transform = "scale(1.1)";
 
-    const outer = document.createElementNS(SVG_NS, "rect");
-    outer.setAttribute("x", "2");
-    outer.setAttribute("y", "4");
-    outer.setAttribute("width", "20");
-    outer.setAttribute("height", "16");
-    outer.setAttribute("rx", "2");
-    outer.setAttribute("ry", "2");
-    outer.setAttribute("fill", "none");
-    outer.setAttribute("stroke", "#ffffff");
-    outer.setAttribute("stroke-width", "1.6");
-    outer.setAttribute("stroke-linejoin", "round");
-
-    const inner = document.createElementNS(SVG_NS, "rect");
-    inner.setAttribute("x", "13");
-    inner.setAttribute("y", "13");
-    inner.setAttribute("width", "7");
-    inner.setAttribute("height", "5");
-    inner.setAttribute("rx", "0.6");
-    inner.setAttribute("ry", "0.6");
-    inner.setAttribute("fill", "#ffffff");
-
-    svg.appendChild(outer);
-    svg.appendChild(inner);
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute(
+      "d",
+      "M21 3a2 2 0 012 2v14a2 2 0 01-2 2H3a2 2 0 01-2-2v-6h2v6h18V5H11V3h10Zm-19.707.293a1 1 0 000 1.414L5.586 9H3a1 1 0 000 2h6V5a1 1 0 00-2 0v2.586L2.707 3.293a1 1 0 00-1.414 0ZM19 11h-7a1 1 0 00-1 1v5a1 1 0 001 1h7a1 1 0 001-1v-5a1 1 0 00-1-1Zm-6 5v-3h5v3h-5Z"
+    );
+    path.setAttribute("fill", "#ffffff");
+    svg.appendChild(path);
     return svg;
   }
 
