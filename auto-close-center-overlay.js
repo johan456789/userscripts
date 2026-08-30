@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.2.4
+// @version      1.3.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -28,6 +28,7 @@ const logger = Logger("[Auto-Close-Overlay]");
  * To add support for a new website, add an entry to this array with:
  *   match       - regex tested against window.location.hostname
  *   selectors   - array of CSS selectors for the close button(s); each is tried in order
+ *   persistent  - if true, keeps monitoring to close recurring idle overlays (default false)
  */
 const SITES = [
   {
@@ -37,6 +38,7 @@ const SITES = [
   {
     match: /mobile01\.com/,
     selectors: ["#idle_content > button"],
+    persistent: true,
   },
   {
     match: /(medium\.com|uxdesign\.cc)/,
@@ -51,10 +53,12 @@ const SITES = [
   {
     match: /udn\.com/,
     selectors: ["body > section.udn-idle .btn.close-btn"],
+    persistent: true,
   },
   {
     match: /mirrormedia\.mg/,
     selectors: ['section[class*="idle-timeout-modal__Background"] .close'],
+    persistent: true,
   },
 ];
 
@@ -67,9 +71,11 @@ const SITES = [
     return;
   }
 
-  const { selectors } = site;
+  const { selectors, persistent = false } = site;
 
-  logger("Monitoring for overlay");
+  logger(
+    `Monitoring for overlay${persistent ? " (persistent)" : ""}`,
+  );
 
   function clickButton(el, sel) {
     logger(`Clicked close button: ${sel}`);
@@ -87,15 +93,22 @@ const SITES = [
     return false;
   }
 
-  if (findAndClick()) return;
+  const foundInitially = findAndClick();
+  if (foundInitially && !persistent) return;
 
   let retryCount = 0;
   const MAX_RETRIES = 20;
   const RETRY_INTERVAL = 100;
 
   const observer = new MutationObserver(() => {
-    if (retryCount > 0) return;
     if (!document.querySelector(selectors[0])) return;
+
+    if (persistent) {
+      findAndClick();
+      return;
+    }
+
+    if (retryCount > 0) return;
 
     observer.disconnect();
 
