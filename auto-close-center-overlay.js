@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.2.3
+// @version      1.2.4
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -13,6 +13,7 @@
 // @match        https://uxdesign.cc/*
 // @match        https://*.substack.com/*
 // @match        https://*.udn.com/*
+// @match        https://*.mirrormedia.mg/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
@@ -50,6 +51,10 @@ const SITES = [
   {
     match: /udn\.com/,
     selectors: ["body > section.udn-idle .btn.close-btn"],
+  },
+  {
+    match: /mirrormedia\.mg/,
+    selectors: ['section[class*="idle-timeout-modal__Background"] .close'],
   },
 ];
 
