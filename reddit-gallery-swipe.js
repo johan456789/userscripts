@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Gallery Swipe
 // @namespace    http://tampermonkey.net/
-// @version      0.1.2
+// @version      0.1.7
 // @description  Add horizontal swipe support for photo carousels on Reddit mobile
 // @include      *://reddit.com/*
 // @include      *://*.reddit.com/*
@@ -26,6 +26,7 @@
   const SWIPE_THRESHOLD_RATIO = 0.12;
   const MAX_VERTICAL_DEVIATION = 80;
   const RESCAN_INTERVAL_MS = 2000;
+  const SWIPE_COOLDOWN_MS = 700;
 
   logger("Userscript started.");
 
@@ -165,19 +166,25 @@
 
     carousel.setAttribute(PROCESSED_ATTR, "true");
 
-    // Allow vertical pan, we handle horizontal
-    carousel.style.touchAction = "pan-y";
-    if (ul) ul.style.touchAction = "pan-y";
-    // Also set on faceplate internals if accessible
+    // Allow vertical pan, we handle horizontal - set on all descendants to ensure move events fire
+    const setPanY = (el) => {
+      try {
+        if (el) el.style.touchAction = "pan-y";
+      } catch (_) {}
+    };
+    setPanY(carousel);
+    setPanY(ul);
     try {
       const cw = faceplate.shadowRoot
         ? faceplate.shadowRoot.querySelector("#carousel-window")
         : null;
-      if (cw) cw.style.touchAction = "pan-y";
+      setPanY(cw);
       const cl = faceplate.shadowRoot
         ? faceplate.shadowRoot.querySelector("#carousel-list")
         : null;
-      if (cl) cl.style.touchAction = "pan-y";
+      setPanY(cl);
+      const lis = carousel.querySelectorAll("li, img, figure");
+      lis.forEach(setPanY);
     } catch (_) {}
 
     let startX = 0;
@@ -187,8 +194,18 @@
     let isTracking = false;
     let isHorizontal = false;
     let hasMoved = false;
+    let lastSwipeTime = 0;
 
     function handleStart(clientX, clientY, src) {
+      const now = Date.now();
+      if (isTracking) {
+        logger(`touchstart ${src} ignored: already tracking`);
+        return;
+      }
+      if (now - lastSwipeTime < SWIPE_COOLDOWN_MS) {
+        logger(`touchstart ${src} ignored: cooldown ${SWIPE_COOLDOWN_MS - (now - lastSwipeTime)}ms left`);
+        return;
+      }
       startX = clientX;
       startY = clientY;
       currentX = clientX;
@@ -216,9 +233,12 @@
       }
 
       if (isHorizontal) {
-        if (Math.abs(deltaX) > 10 && e && e.cancelable) {
+        if (e) {
           try {
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
+            // Stop faceplate-carousel's own touch recognizer from handling this gesture
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
           } catch (_) {}
         }
       } else {
@@ -229,7 +249,7 @@
       }
     }
 
-    function handleEnd(src) {
+    function handleEnd(src, rawEvent) {
       if (!isTracking) {
         logger(`touchend ${src} ignored: not tracking (hasMoved=${hasMoved} isHorizontal=${isHorizontal})`);
         return;
@@ -268,6 +288,15 @@
       if (!isHorizontal) {
         logger("swipe ignored: not horizontal or no movement");
         return;
+      }
+
+      // Prevent faceplate's touch recognizer from also handling this horizontal swipe
+      if (rawEvent) {
+        try {
+          if (rawEvent.cancelable) rawEvent.preventDefault();
+          rawEvent.stopPropagation();
+          if (rawEvent.stopImmediatePropagation) rawEvent.stopImmediatePropagation();
+        } catch (_) {}
       }
 
       const deltaX = currentX - startX;
@@ -314,7 +343,7 @@
         currentX = t.clientX;
         currentY = t.clientY;
       }
-      handleEnd("touch-window");
+      handleEnd("touch-window", e);
     }
     function onWindowTouchCancel() {
       logger("touchcancel window");
@@ -328,18 +357,21 @@
       } catch (_) {}
     }
     function onWindowPointerMove(e) {
-      if (e.pointerType === "touch") return;
       if (!isTracking) return;
-      handleMove(e.clientX, e.clientY, e, "pointer-window");
+      handleMove(e.clientX, e.clientY, e, `pointer-window-${e.pointerType}`);
     }
     function onWindowPointerUp(e) {
-      if (e.pointerType === "touch") return;
       currentX = e.clientX;
       currentY = e.clientY;
-      handleEnd("pointer-window");
+      handleEnd(`pointer-window-${e.pointerType}`, e);
     }
 
     function onTouchStart(e) {
+      // faceplate-carousel has its own touch recognizer; use only this handler
+      try {
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      } catch (_) {}
       if (e.touches.length !== 1) {
         logger(`touchstart ignored: touches=${e.touches.length}`);
         return;
@@ -361,13 +393,12 @@
     }
 
     function onTouchEnd(e) {
-      // e.touches is 0 on touchend, use changedTouches
       if (e.changedTouches && e.changedTouches.length === 1) {
         const t = e.changedTouches[0];
         currentX = t.clientX;
         currentY = t.clientY;
       }
-      handleEnd("touch");
+      handleEnd("touch", e);
     }
 
     function onTouchCancel() {
@@ -383,54 +414,48 @@
     }
 
     // Pointer events fallback (for desktop drag testing and some mobile browsers)
+    // Don't ignore touch pointerType - some browsers fire pointer instead of touch
     function onPointerDown(e) {
-      // Ignore mouse right click, multi-touch is handled via touch events
-      if (e.pointerType === "touch") return; // let touch handlers handle touch pointers
       if (e.button !== 0) return;
-      handleStart(e.clientX, e.clientY, "pointer");
+      // If already tracking via touch, ignore duplicate pointer
+      if (isTracking) {
+        logger(`pointerdown ${e.pointerType} ignored: already tracking`);
+        return;
+      }
+      handleStart(e.clientX, e.clientY, `pointer-${e.pointerType}`);
       window.addEventListener("pointermove", onWindowPointerMove, { passive: true });
       window.addEventListener("pointerup", onWindowPointerUp, { passive: true });
-      // Capture pointer so we get move events even if out of bounds
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch (_) {}
     }
     function onPointerMove(e) {
-      if (e.pointerType === "touch") return;
       if (!isTracking) return;
-      handleMove(e.clientX, e.clientY, e, "pointer");
+      handleMove(e.clientX, e.clientY, e, `pointer-${e.pointerType}`);
     }
     function onPointerUp(e) {
-      if (e.pointerType === "touch") return;
       if (e.changedTouches) return;
       currentX = e.clientX;
       currentY = e.clientY;
-      handleEnd("pointer");
+      handleEnd(`pointer-${e.pointerType}`, e);
     }
 
-    const targets = [carousel, ul];
-    // Also add listeners inside shadow where hit test actually happens
-    try {
-      const carouselWindow = faceplate.shadowRoot
-        ? faceplate.shadowRoot.querySelector("#carousel-window")
-        : null;
-      if (carouselWindow) targets.push(carouselWindow);
-      const carouselList = faceplate.shadowRoot
-        ? faceplate.shadowRoot.querySelector("#carousel-list")
-        : null;
-      if (carouselList) targets.push(carouselList);
-    } catch (_) {}
+    // Attach only to carousel host to avoid duplicate bubbling (all slotted touches bubble to host)
+    // Keep ul as secondary target for hit testing where host may have zero height on some viewports
+    const targets = [carousel];
+    // Only add ul if it's not the same element
+    if (ul && ul !== carousel) targets.push(ul);
 
     for (const target of targets) {
-      target.addEventListener("touchstart", onTouchStart, { passive: true });
-      target.addEventListener("touchmove", onTouchMove, { passive: false });
-      target.addEventListener("touchend", onTouchEnd, { passive: true });
-      target.addEventListener("touchcancel", onTouchCancel, { passive: true });
-      // pointer fallback for mouse drag
-      target.addEventListener("pointerdown", onPointerDown, { passive: true });
-      target.addEventListener("pointermove", onPointerMove, { passive: true });
-      target.addEventListener("pointerup", onPointerUp, { passive: true });
-      target.addEventListener("pointercancel", onTouchCancel, { passive: true });
+      // Use capture to intercept before faceplate's own handlers
+      target.addEventListener("touchstart", onTouchStart, { passive: true, capture: true });
+      target.addEventListener("touchmove", onTouchMove, { passive: false, capture: true });
+      target.addEventListener("touchend", onTouchEnd, { passive: true, capture: true });
+      target.addEventListener("touchcancel", onTouchCancel, { passive: true, capture: true });
+      target.addEventListener("pointerdown", onPointerDown, { passive: true, capture: true });
+      target.addEventListener("pointermove", onPointerMove, { passive: true, capture: true });
+      target.addEventListener("pointerup", onPointerUp, { passive: true, capture: true });
+      target.addEventListener("pointercancel", onTouchCancel, { passive: true, capture: true });
     }
 
     logger(
