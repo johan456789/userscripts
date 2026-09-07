@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.7.1
+// @version      0.8.0
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -11,6 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      api.elevenlabs.io
+// @connect      api.cartesia.ai
 // @connect      generativelanguage.googleapis.com
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
@@ -42,8 +43,19 @@ const CONFIG = {
     evictIntervalMs: 6 * 60 * 60 * 1000,
   },
   tts: {
-    providerId: "gemini",
+    providerId: "cartesia",
     providers: {
+      cartesia: {
+        displayName: "Cartesia",
+        apiKeyStorageKey: "gemini_storybook_tts_cartesia_api_key",
+        apiVersion: "2026-08-14",
+        modelId: "sonic-3.6",
+        voiceId: "b4b8e2af-6139-466e-a93a-30c20d2e1fc5",
+        language: "es",
+        sampleRate: 44100,
+        encoding: "pcm_s16le",
+        speed: 0.8,
+      },
       elevenlabs: {
         displayName: "ElevenLabs",
         apiKeyStorageKey: "gemini_storybook_tts_elevenlabs_api_key",
@@ -192,6 +204,90 @@ const Cache = (() => {
 
 const TTS = (() => {
   const providers = {
+    cartesia: {
+      buildRequest(text, apiKey, config) {
+        return {
+          endpoint: "https://api.cartesia.ai/tts/sse",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Cartesia-Version": config.apiVersion,
+            "Content-Type": "application/json",
+          },
+          payload: {
+            model_id: config.modelId,
+            transcript: text,
+            voice: { id: config.voiceId },
+            output_format: {
+              container: "raw",
+              encoding: config.encoding,
+              sample_rate: config.sampleRate,
+            },
+            language: config.language,
+            add_timestamps: true,
+            use_normalized_timestamps: false,
+            generation_config: {
+              speed: config.speed,
+            },
+          },
+          timeout: 30000,
+        };
+      },
+
+      parseResponse(responseText, config, text) {
+        const events = parseCartesiaSSEEvents(responseText);
+        const audioChunks = [];
+        const words = [];
+        const starts = [];
+        const ends = [];
+
+        for (const event of events) {
+          if (event.type === "chunk" && event.data) {
+            audioChunks.push(base64ToBytes(event.data));
+          } else if (event.type === "timestamps" && event.word_timestamps) {
+            const wt = event.word_timestamps;
+            if (
+              Array.isArray(wt.words) &&
+              Array.isArray(wt.start) &&
+              Array.isArray(wt.end)
+            ) {
+              for (let i = 0; i < wt.words.length; i++) {
+                words.push(wt.words[i]);
+                starts.push(wt.start[i]);
+                ends.push(wt.end[i]);
+              }
+            }
+          } else if (event.type === "error") {
+            throw new Error(
+              `Cartesia TTS error: ${event.title || ""} ${event.message || ""}`.trim()
+            );
+          }
+        }
+
+        if (audioChunks.length === 0) {
+          throw new Error("No audio data in Cartesia response");
+        }
+
+        const pcmBytes = concatUint8Arrays(audioChunks);
+
+        if (config.encoding !== "pcm_s16le") {
+          throw new Error(
+            `Unsupported Cartesia encoding: ${config.encoding}. Expected pcm_s16le.`
+          );
+        }
+
+        return {
+          audioBlob: pcmBytesToWavBlob(pcmBytes, {
+            sampleRate: config.sampleRate,
+            channels: 1,
+            bitsPerSample: 16,
+          }),
+          contentType: "audio/wav",
+          alignment: buildCartesiaCharacterAlignment(text, words, starts, ends),
+          normalizedAlignment: null,
+        };
+      },
+    },
+
     elevenlabs: {
       buildRequest(text, apiKey, config) {
         const payload = {
@@ -449,6 +545,115 @@ const TTS = (() => {
     return parts;
   }
 
+  function parseCartesiaSSEEvents(responseText) {
+    const events = [];
+    for (const line of String(responseText).split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      events.push(JSON.parse(payload));
+    }
+    return events;
+  }
+
+  function buildCartesiaCharacterAlignment(text, words, starts, ends) {
+    if (!text || !Array.isArray(words) || words.length === 0) return null;
+
+    const characters = text.split("");
+    const n = characters.length;
+    const charStarts = new Array(n).fill(Number.NaN);
+    const charEnds = new Array(n).fill(Number.NaN);
+    const lowerText = text.toLowerCase();
+    let cursor = 0;
+
+    function assignSpan(idx, len, s, e) {
+      for (let k = cursor; k < idx; k++) {
+        if (!Number.isFinite(charStarts[k])) {
+          charStarts[k] = s;
+          charEnds[k] = s;
+        }
+      }
+      for (let j = 0; j < len; j++) {
+        charStarts[idx + j] = s + ((e - s) * j) / len;
+        charEnds[idx + j] = s + ((e - s) * (j + 1)) / len;
+      }
+    }
+
+    for (let i = 0; i < words.length; i++) {
+      const word = String(words[i] ?? "");
+      if (!word) continue;
+      const s = Number(starts[i]);
+      const e = Number(ends[i]);
+      if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+
+      let idx = text.indexOf(word, cursor);
+      if (idx === -1) {
+        idx = lowerText.indexOf(word.toLowerCase(), cursor);
+      }
+      if (idx === -1) {
+        const stripped = word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+        if (stripped && stripped !== word) {
+          idx = text.indexOf(stripped, cursor);
+          if (idx === -1) {
+            idx = lowerText.indexOf(stripped.toLowerCase(), cursor);
+          }
+          if (idx !== -1) {
+            assignSpan(idx, stripped.length, s, e);
+            cursor = idx + stripped.length;
+            continue;
+          }
+        }
+        logger.warn("Cartesia word not found in text, skipping.", word);
+        continue;
+      }
+
+      assignSpan(idx, word.length, s, e);
+      cursor = idx + word.length;
+    }
+
+    let lastEnd = Number.NaN;
+    for (let k = n - 1; k >= 0; k--) {
+      if (Number.isFinite(charEnds[k])) {
+        lastEnd = charEnds[k];
+        break;
+      }
+    }
+    if (!Number.isFinite(lastEnd)) return null;
+    for (let k = cursor; k < n; k++) {
+      if (!Number.isFinite(charStarts[k])) {
+        charStarts[k] = lastEnd;
+        charEnds[k] = lastEnd;
+      }
+    }
+
+    let firstStart = Number.NaN;
+    for (let k = 0; k < n; k++) {
+      if (Number.isFinite(charStarts[k])) {
+        firstStart = charStarts[k];
+        break;
+      }
+    }
+    for (let k = 0; k < n; k++) {
+      if (!Number.isFinite(charStarts[k])) {
+        charStarts[k] = firstStart;
+        charEnds[k] = firstStart;
+      }
+    }
+    for (let k = 1; k < n; k++) {
+      if (!Number.isFinite(charStarts[k])) {
+        charStarts[k] = charStarts[k - 1];
+        charEnds[k] = charEnds[k - 1];
+      }
+    }
+
+    return {
+      characters,
+      character_start_times_seconds: charStarts,
+      character_end_times_seconds: charEnds,
+    };
+  }
+
   async function request(text, options = {}) {
     const { onBeforeNetwork } = options;
     onBeforeNetwork?.();
@@ -491,7 +696,7 @@ const TTS = (() => {
       const entry = {
         providerId: provider.id,
         modelId: provider.modelId,
-        ...provider.adapter.parseResponse(responseText, provider),
+        ...provider.adapter.parseResponse(responseText, provider, text),
       };
 
       await Cache.setItem(text, entry);
