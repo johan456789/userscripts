@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Maps Language Selector
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
+// @version      1.4.0
 // @description  Adds a language selector button to Google Maps.
 // @author       You
 // @match        https://www.google.com/maps*
@@ -9,7 +9,7 @@
 // @match        https://maps.google.com/*
 // @match        https://maps.google.*/
 // @grant        none
-// @run-at       document-end
+// @run-at       document-start
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/wait-for-element.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/google-maps-language-selector.js
@@ -20,16 +20,37 @@
 (function () {
   "use strict";
 
+  // Users can configure which language codes to show in the dropdown.
+  // Use language codes for the 'hl' param. Display names come from LANGUAGE_CODE_TO_NAME.
+  const ENABLED_LANGUAGES = ["zh-TW", "en"];
+  const STORAGE_KEY = "google-maps-language-selector:hl";
+
+  // Early redirect (runs at document-start, before first paint): apply the
+  // persisted hl immediately so Maps loads once, in the right language, with
+  // no flash and no post-render full refresh. location.replace avoids an
+  // extra history entry. Only localStorage + location are touched here, so
+  // this is safe before DOM exists.
+  try {
+    const earlyUrl = new URL(window.location.href);
+    if (!earlyUrl.searchParams.get("hl")) {
+      const earlyStored = window.localStorage.getItem(STORAGE_KEY);
+      if (earlyStored && ENABLED_LANGUAGES.includes(earlyStored)) {
+        earlyUrl.searchParams.set("hl", earlyStored);
+        window.location.replace(earlyUrl.toString());
+        return;
+      }
+    }
+  } catch (e) {
+    // Storage/URL unavailable – fall through to normal init below, which
+    // re-checks before the button is built.
+  }
+
   const logger = Logger("[Google-Maps-Language-Selector]");
   if (window.__googleMapsLangSelectorInitialized) {
     return;
   }
   window.__googleMapsLangSelectorInitialized = true;
   logger("Script started.");
-
-  // Users can configure which language codes to show in the dropdown.
-  // Use language codes for the 'hl' param. Display names come from LANGUAGE_CODE_TO_NAME.
-  const ENABLED_LANGUAGES = ["zh-TW", "en"];
 
   // Map of Google service 'hl' codes to display names (as in the table).
   const LANGUAGE_CODE_TO_NAME = {
@@ -132,6 +153,28 @@
     }
   }
 
+  // Persisted choice (localStorage, no GM grant needed). URL `hl` is the
+  // source of truth when present; storage carries it across sessions that
+  // start without `hl`. STORAGE_KEY is defined at the top for the early
+  // redirect.
+  function getStoredHl() {
+    try {
+      const value = window.localStorage.getItem(STORAGE_KEY);
+      return value && ENABLED_LANGUAGES.includes(value) ? value : null;
+    } catch (e) {
+      logger.error("Failed to read stored language", e);
+      return null;
+    }
+  }
+
+  function setStoredHl(code) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, code);
+    } catch (e) {
+      logger.error("Failed to store language", e);
+    }
+  }
+
   function createButtonElement() {
     const wrapper = document.createElement("div");
     wrapper.innerHTML = BUTTON_WRAPPER_HTML;
@@ -207,18 +250,42 @@
     icon.textContent = "translate";
     trigger.appendChild(icon);
     select.appendChild(trigger);
+    // Hidden placeholder: selected when no language is in effect, so no
+    // language option shows a tick. Never visible in the trigger (static
+    // icon) nor in the picker list (hidden).
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.disabled = true;
+    placeholder.hidden = true;
+    placeholder.textContent = "Choose language";
+    select.appendChild(placeholder);
     ENABLED_LANGUAGES.forEach((code) => {
       const opt = document.createElement("option");
       opt.value = code;
       opt.textContent = LANGUAGE_CODE_TO_NAME[code] || code;
       select.appendChild(opt);
     });
-    const currentHl = getCurrentHlParam();
-    if (currentHl && ENABLED_LANGUAGES.includes(currentHl)) {
-      select.value = currentHl;
+    // Resolve effective language: URL wins and is persisted; otherwise apply
+    // the persisted choice (reloads once with hl); otherwise no tick.
+    const urlHl = getCurrentHlParam();
+    if (urlHl && ENABLED_LANGUAGES.includes(urlHl)) {
+      setStoredHl(urlHl);
+      select.value = urlHl;
+    } else if (!urlHl) {
+      const storedHl = getStoredHl();
+      if (storedHl) {
+        navigateWithLanguage(storedHl);
+      } else {
+        select.value = "";
+      }
+    } else {
+      select.value = "";
     }
     select.addEventListener("change", () => {
-      if (select.value) navigateWithLanguage(select.value);
+      if (select.value) {
+        setStoredHl(select.value);
+        navigateWithLanguage(select.value);
+      }
     });
     element.appendChild(select);
     return element;
@@ -322,22 +389,33 @@
     logger("Language selector inserted in the account controls.");
   }
 
-  waitForElement(
-    CONTAINER_SELECTOR,
-    (container) => {
-      logger("Container found:", container);
-      if (document.getElementById(BUTTON_ID)) {
-        logger("Language selector already inserted.");
-        return;
-      }
-      const buttonEl = createButtonElement();
-      if (!buttonEl) {
-        logger.error("Failed to create button element.");
-        return;
-      }
+  // waitForElement observes document.body, which may not exist yet at
+  // document-start. Defer until it does.
+  function startWhenBodyReady() {
+    if (document.body) {
+      waitForElement(
+        CONTAINER_SELECTOR,
+        (container) => {
+          logger("Container found:", container);
+          if (document.getElementById(BUTTON_ID)) {
+            logger("Language selector already inserted.");
+            return;
+          }
+          const buttonEl = createButtonElement();
+          if (!buttonEl) {
+            logger.error("Failed to create button element.");
+            return;
+          }
 
-      insertButton(container, buttonEl);
-    },
-    10000
-  );
+          insertButton(container, buttonEl);
+        },
+        10000
+      );
+    } else {
+      document.addEventListener("DOMContentLoaded", startWhenBodyReady, {
+        once: true,
+      });
+    }
+  }
+  startWhenBodyReady();
 })();
