@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Maps Language Selector
 // @namespace    http://tampermonkey.net/
-// @version      1.1.5
+// @version      1.2.0
 // @description  Adds a language selector button to Google Maps.
 // @author       You
 // @match        https://www.google.com/maps*
@@ -111,9 +111,16 @@
 
   const CONTAINER_SELECTOR = "#gb [data-ogsr-up], #gb > div";
   const BUTTON_ID = "google-maps-language-selector-button";
-  // Only Tc0rEd Zf54rc are required for the white squircle background.
+  // NOTE: do NOT put Google's internal component classes (e.g. Tc0rEd, Zf54rc)
+  // on our button. Google's JS upgrades elements bearing its own classes after
+  // page load and wipes their children – that is why the icon flashed for a
+  // split second after refresh and then vanished. The circle is styled with
+  // plain inline CSS so Google leaves it alone.
+  // Icon: official Google Symbols "translate" ligature (renders as 文A),
+  // exactly like Google's own header icons (e.g. the apps grid next to it).
+  // The font is loaded by the Maps page itself, so no custom font/SVG/text.
   const BUTTON_WRAPPER_HTML =
-    '<div id="google-maps-language-selector-button"><button class="Tc0rEd Zf54rc" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:20px;background:#fff;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px 1px rgba(60,64,67,.15)"><span class="google-symbols" style="font-size: 18px; line-height: 1;"></span></button></div>';
+    '<div id="google-maps-language-selector-button"><button type="button" title="Switch language" aria-label="Switch language" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:none;padding:0;margin:0;border-radius:20px;background:#fff;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px 1px rgba(60,64,67,.15);cursor:pointer"><span class="google-symbols" aria-hidden="true" style="font-size:20px;line-height:1;color:#5f6368;user-select:none">translate</span></button></div>';
 
   function getCurrentHlParam() {
     try {
@@ -148,35 +155,6 @@
       button.type = "button";
       button.title = "Switch language";
     }
-
-    // Create a native <select> that we will open programmatically.
-    // Keep it visually hidden and fixed so it is not clipped by Google's top bar.
-    const select = document.createElement("select");
-    select.setAttribute("aria-label", "Choose language");
-    select.style.position = "fixed";
-    select.style.top = "0";
-    select.style.left = "0";
-    select.style.opacity = "0";
-    select.style.pointerEvents = "none";
-    select.style.zIndex = "2147483647";
-
-    // Placeholder option so no language is selected by default when no hl param is present
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.hidden = false;
-    placeholder.disabled = true;
-    placeholder.selected = true;
-    placeholder.textContent = "Select language";
-    select.appendChild(placeholder);
-
-    // Populate options from ENABLED_LANGUAGES using LANGUAGE_CODE_TO_NAME
-    ENABLED_LANGUAGES.forEach((code) => {
-      const display = LANGUAGE_CODE_TO_NAME[code] || code;
-      const opt = document.createElement("option");
-      opt.value = code;
-      opt.textContent = display;
-      select.appendChild(opt);
-    });
 
     function navigateWithLanguage(code) {
       // No need to check existing 'hl' parameter; Google uses the last one.
@@ -219,55 +197,160 @@
       }
     }
 
-    // Open the dropdown on button click without moving the button.
+    // Build a custom dropdown menu (fixed-position, viewport-aware) instead of
+    // native <select> + showPicker. Native pickers are anchored to the select's
+    // box and cannot be clamped to the viewport reliably; when the button is at
+    // the far right (after the profile avatar) the picker overflows and gets
+    // clipped ("Select la..." in the bug report).
+    // Semantic list markup: ul[role=menu] > li[role=none] > button[role=menuitem].
+    // Real <button> elements give keyboard/AT semantics for free.
+    const menu = document.createElement("ul");
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Choose language");
+    menu.id = BUTTON_ID + "-menu";
+    menu.style.position = "fixed";
+    menu.style.display = "none";
+    menu.style.flexDirection = "column";
+    menu.style.minWidth = "180px";
+    menu.style.maxWidth = "min(280px, calc(100vw - 16px))";
+    menu.style.maxHeight = "min(60vh, 400px)";
+    menu.style.overflowY = "auto";
+    menu.style.background = "#fff";
+    menu.style.border = "1px solid #dadce0";
+    menu.style.borderRadius = "8px";
+    menu.style.boxShadow =
+      "0 1px 2px rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15)";
+    menu.style.zIndex = "2147483647";
+    menu.style.padding = "4px 0";
+    menu.style.margin = "0";
+    menu.style.listStyle = "none";
+    menu.style.fontFamily = "Roboto, Arial, sans-serif";
+
+    function createMenuItem(label, code, opts) {
+      const li = document.createElement("li");
+      li.setAttribute("role", "none");
+      li.style.margin = "0";
+      li.style.padding = "0";
+      const item = document.createElement("button");
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      if (opts && opts.selected) item.setAttribute("aria-current", "true");
+      item.dataset.langCode = code || "";
+      item.style.display = "block";
+      item.style.width = "100%";
+      item.style.boxSizing = "border-box";
+      item.style.border = "none";
+      item.style.background = opts && opts.selected ? "#e8f0fe" : "transparent";
+      item.style.padding = "10px 16px";
+      item.style.fontSize = "14px";
+      item.style.lineHeight = "20px";
+      item.style.fontFamily = "inherit";
+      item.style.textAlign = "left";
+      item.style.cursor = "pointer";
+      item.style.whiteSpace = "nowrap";
+      item.style.overflow = "hidden";
+      item.style.textOverflow = "ellipsis";
+      item.style.color = "#202124";
+      if (opts && opts.selected) {
+        item.style.fontWeight = "500";
+      }
+      item.addEventListener("mouseenter", () => {
+        if (!(opts && opts.selected)) item.style.background = "#f1f3f4";
+      });
+      item.addEventListener("mouseleave", () => {
+        item.style.background = opts && opts.selected ? "#e8f0fe" : "transparent";
+      });
+      item.addEventListener("click", () => {
+        if (code) navigateWithLanguage(code);
+      });
+      item.textContent = label;
+      li.appendChild(item);
+      return li;
+    }
+
+    function rebuildMenu() {
+      menu.innerHTML = "";
+      const currentHl = getCurrentHlParam();
+      ENABLED_LANGUAGES.forEach((code) => {
+        const display = LANGUAGE_CODE_TO_NAME[code] || code;
+        const isSelected = currentHl === code;
+        menu.appendChild(createMenuItem(display, code, { selected: isSelected }));
+      });
+    }
+
+    function positionMenu() {
+      // Ensure menu is measurable but not visible for sizing
+      const prevDisplay = menu.style.display;
+      const prevVisibility = menu.style.visibility;
+      menu.style.visibility = "hidden";
+      menu.style.display = "flex";
+      // Force layout
+      const menuWidth = menu.offsetWidth;
+      const menuHeight = menu.offsetHeight;
+      menu.style.display = prevDisplay;
+      menu.style.visibility = prevVisibility;
+
+      const rect = button.getBoundingClientRect();
+      const GAP = 8;
+      const MARGIN = 8;
+
+      // Prefer anchoring the menu's right edge to the button's right edge
+      // (button is at the viewport's right side after the profile avatar).
+      let left = rect.right - menuWidth;
+      // If menu narrower than button, left-align instead to avoid gap
+      if (menuWidth < rect.width) left = rect.left;
+
+      // Clamp horizontally inside viewport
+      left = Math.max(MARGIN, Math.min(left, window.innerWidth - menuWidth - MARGIN));
+
+      // Vertical: below button if fits, otherwise above
+      let top = rect.bottom + GAP;
+      if (top + menuHeight > window.innerHeight - MARGIN) {
+        const above = rect.top - GAP - menuHeight;
+        if (above >= MARGIN) {
+          top = above;
+        } else {
+          // Not enough space either way: clamp and let it scroll
+          top = Math.max(MARGIN, window.innerHeight - menuHeight - MARGIN);
+        }
+      }
+
+      menu.style.left = left + "px";
+      menu.style.top = top + "px";
+    }
+
+    let menuOpen = false;
+    function openMenu() {
+      rebuildMenu();
+      menu.style.display = "flex";
+      positionMenu();
+      // Make visible after positioning
+      menu.style.visibility = "visible";
+      menuOpen = true;
+    }
+    function closeMenu() {
+      menu.style.display = "none";
+      menu.style.visibility = "";
+      menuOpen = false;
+    }
+
+    // Append menu to body (fixed positioning, not clipped by #gb)
+    document.body.appendChild(menu);
+
     if (button) {
+      button.setAttribute("aria-haspopup", "menu");
+      button.setAttribute("aria-expanded", "false");
+      button.setAttribute("aria-controls", menu.id);
       button.addEventListener("click", (event) => {
         event.preventDefault();
+        event.stopPropagation();
         try {
-          // Preselect option based on current URL 'hl' param; default to placeholder if absent/invalid
-          const currentHl = getCurrentHlParam();
-          if (currentHl && ENABLED_LANGUAGES.includes(currentHl)) {
-            select.value = currentHl;
+          if (menuOpen) {
+            closeMenu();
+            button.setAttribute("aria-expanded", "false");
           } else {
-            select.value = "";
-          }
-          // Anchor the native picker to the button. With showPicker, browsers use the
-          // select's box as the popup origin, so keep it exactly over the button.
-          const rect = button.getBoundingClientRect();
-          select.style.top = rect.top + "px";
-          select.style.left = rect.left + "px";
-          select.style.width = rect.width + "px";
-          select.style.height = rect.height + "px";
-
-          // Enable interactions
-          select.style.pointerEvents = "auto";
-          select.style.opacity = "0";
-
-          // Prefer native showPicker if available to show options only
-          if (typeof select.showPicker === "function") {
-            // Ensure it's not display:none so showPicker works
-            select.showPicker();
-            // After opening, immediately disable pointer events; browser keeps the picker open
-            setTimeout(() => {
-              select.style.pointerEvents = "none";
-            }, 0);
-          } else {
-            // Fallback: display a sized list positioned under the button
-            select.size = Math.min(ENABLED_LANGUAGES.length, 10);
-            select.style.top = rect.bottom + 8 + "px";
-            select.style.width = "220px";
-            select.style.height = "auto";
-            select.style.opacity = "1";
-            select.style.pointerEvents = "auto";
-            // Hide it again when it loses focus
-            const hide = () => {
-              select.removeEventListener("blur", hide);
-              select.style.opacity = "0";
-              select.style.pointerEvents = "none";
-              select.removeAttribute("size");
-            };
-            select.addEventListener("blur", hide);
-            select.focus();
+            openMenu();
+            button.setAttribute("aria-expanded", "true");
           }
         } catch (e) {
           logger.error("Failed to open language dropdown", e);
@@ -275,16 +358,58 @@
       });
     }
 
-    // Handle selection
-    select.addEventListener("change", () => {
-      const code = select.value;
-      if (code) {
-        navigateWithLanguage(code);
+    // Auto-dismiss like a native dropdown: any pointerdown outside (capture
+    // phase, so map pans/zooms register even though they never fire "click"
+    // and Maps may stopPropagation), wheel-zoom, page scroll, tabbing away,
+    // or Escape. Resize only repositions since the button is still visible.
+    function dismissMenu() {
+      if (!menuOpen) return;
+      closeMenu();
+      if (button) button.setAttribute("aria-expanded", "false");
+    }
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (!menuOpen) return;
+        if (element.contains(e.target) || menu.contains(e.target)) return;
+        dismissMenu();
+      },
+      true
+    );
+    document.addEventListener(
+      "wheel",
+      () => {
+        dismissMenu();
+      },
+      { capture: true, passive: true }
+    );
+    window.addEventListener(
+      "scroll",
+      (e) => {
+        if (!menuOpen) return;
+        // Keep the menu usable when scrolling inside it; dismiss otherwise.
+        if (menu.contains(e.target)) return;
+        dismissMenu();
+      },
+      true
+    );
+    document.addEventListener("focusin", (e) => {
+      if (!menuOpen) return;
+      if (element.contains(e.target) || menu.contains(e.target)) return;
+      dismissMenu();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && menuOpen) {
+        dismissMenu();
+        if (button) button.focus();
       }
     });
+    window.addEventListener("resize", () => {
+      if (menuOpen) positionMenu();
+    });
 
-    // Insert the select into our element wrapper next to the button
-    element.appendChild(select);
+    // Keep a reference for cleanup / debugging
+    element._langMenu = menu;
     return element;
   }
 
