@@ -8,7 +8,7 @@
   const YOUTUBE_ACTION_BUTTON_STYLE_ID = "userscript-yt-action-button-styles";
   const YOUTUBE_ACTION_BUTTON_TAGS = { wrapper: "yt-button-view-model" };
   const YOUTUBE_ACTION_BUTTON_CLASS_LIST =
-    "ytSpecButtonShapeNextHost ytSpecButtonShapeNextTonal ytSpecButtonShapeNextMono ytSpecButtonShapeNextSizeM ytSpecButtonShapeNextEnableBackdropFilterExperiment"
+    "ytSpecButtonShapeNextHost ytSpecButtonShapeNextTonal ytSpecButtonShapeNextMono ytSpecButtonShapeNextSizeM ytSpecButtonShapeNextIconOnly ytSpecButtonShapeNextEnableBackdropFilterExperiment ytSpecButtonShapeNextMainstageIconSize ytSpecButtonShapeNextMainstagePadding"
       .split(" ")
       .filter(Boolean);
 
@@ -33,6 +33,19 @@
 
 .${YOUTUBE_ACTION_BUTTON_CLASSES.host} button.ytSpecButtonShapeNextHost:not([disabled]) {
   cursor: pointer;
+}
+
+/* Match native icon-only mainstage buttons (24px icon, centered) */
+.${YOUTUBE_ACTION_BUTTON_CLASSES.host} .ytSpecButtonShapeNextIcon,
+.${YOUTUBE_ACTION_BUTTON_CLASSES.host} .ytSpecButtonShapeNextButtonTextContent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.${YOUTUBE_ACTION_BUTTON_CLASSES.host} button.ytSpecButtonShapeNextHost svg {
+  width: 24px;
+  height: 24px;
 }
 
 .${YOUTUBE_ACTION_BUTTON_CLASSES.host} .${YOUTUBE_ACTION_BUTTON_CLASSES.tooltip} {
@@ -166,6 +179,22 @@
       typeof buildButtonContent === "function"
         ? buildButtonContent(button, { createTouchFeedback })
         : undefined;
+
+    // Normalize to native structure: ElevatedContent on icon/text
+    // containers, touch feedback last (native order is icon, text, touch).
+    button
+      .querySelectorAll(
+        ":scope > .ytSpecButtonShapeNextIcon, :scope > .ytSpecButtonShapeNextButtonTextContent"
+      )
+      .forEach((el) =>
+        el.classList.add("ytSpecButtonShapeNextElevatedContent")
+      );
+    const touchFeedback = button.querySelector(
+      ":scope > yt-touch-feedback-shape"
+    );
+    if (touchFeedback) {
+      button.appendChild(touchFeedback);
+    }
 
     button.addEventListener("click", onClick);
 
