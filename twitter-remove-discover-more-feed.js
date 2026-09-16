@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Remove Discover More Feed
 // @namespace    http://tampermonkey.net/
-// @version      1.0.5
+// @version      1.0.6
 // @description  Hide the irrelevant "Discover more" feed and everything after it in comment threads.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -49,31 +49,27 @@ logger("Userscript started.");
     return false;
   }
 
-  function isInPhotoOverlay(cell) {
-    // Photo viewer lives in #layers / role="dialog" and appears BEFORE <main>
-    // in DOM order. A "Discover more" marker there must not hide <main>'s cells.
-    return Boolean(cell.closest('[role="dialog"], #layers'));
+  function listKey(cell) {
+    // The photo viewer list lives in #layers / role="dialog" and appears BEFORE
+    // <main> in DOM order. Each list gets its own hide flag so a marker in one
+    // list never wipes the other list behind/beside it.
+    return cell.closest('[role="dialog"], #layers') ? "overlay" : "main";
   }
 
   function hideDiscoverMoreAndFollowing() {
-    // Scope to the main timeline only. Never touch the photo overlay's list:
-    // document order is overlay cells first, then <main> cells, so a global
-    // "hide this + all following" would wipe the timeline behind the overlay.
-    const cells = document.querySelectorAll(`main ${CELL_SELECTOR}`);
-    let hideFromHere = false;
+    const cells = document.querySelectorAll(CELL_SELECTOR);
+    const hideFromHereByList = { main: false, overlay: false };
 
     for (const cell of cells) {
-      if (isInPhotoOverlay(cell)) {
-        continue;
-      }
-      if (!hideFromHere && cellContainsDiscoverMore(cell)) {
+      const key = listKey(cell);
+      if (!hideFromHereByList[key] && cellContainsDiscoverMore(cell)) {
         logger(
-          '"Discover more" marker found. Hiding this cell and all following cells.'
+          `"Discover more" marker found in ${key} list. Hiding this cell and all following cells in the same list.`
         );
-        hideFromHere = true;
+        hideFromHereByList[key] = true;
       }
 
-      if (hideFromHere) {
+      if (hideFromHereByList[key]) {
         if (cell.style.display !== "none") {
           cell.style.display = "none";
         }
