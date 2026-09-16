@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Remove Discover More Feed
 // @namespace    http://tampermonkey.net/
-// @version      1.0.4
+// @version      1.0.5
 // @description  Hide the irrelevant "Discover more" feed and everything after it in comment threads.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -49,11 +49,23 @@ logger("Userscript started.");
     return false;
   }
 
+  function isInPhotoOverlay(cell) {
+    // Photo viewer lives in #layers / role="dialog" and appears BEFORE <main>
+    // in DOM order. A "Discover more" marker there must not hide <main>'s cells.
+    return Boolean(cell.closest('[role="dialog"], #layers'));
+  }
+
   function hideDiscoverMoreAndFollowing() {
-    const cells = document.querySelectorAll(CELL_SELECTOR);
+    // Scope to the main timeline only. Never touch the photo overlay's list:
+    // document order is overlay cells first, then <main> cells, so a global
+    // "hide this + all following" would wipe the timeline behind the overlay.
+    const cells = document.querySelectorAll(`main ${CELL_SELECTOR}`);
     let hideFromHere = false;
 
     for (const cell of cells) {
+      if (isInPhotoOverlay(cell)) {
+        continue;
+      }
       if (!hideFromHere && cellContainsDiscoverMore(cell)) {
         logger(
           '"Discover more" marker found. Hiding this cell and all following cells.'
