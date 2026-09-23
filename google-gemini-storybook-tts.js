@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Gemini Storybook TTS
 // @namespace    http://tampermonkey.net/
-// @version      0.8.0
+// @version      0.8.1
 // @description  Adds a play button above Gemini Storybook text to read current page with TTS
 // @author       You
 // @match        https://gemini.google.com/gem/storybook
@@ -69,7 +69,7 @@ const CONFIG = {
       gemini: {
         displayName: "Gemini",
         apiKeyStorageKey: "gemini_storybook_tts_gemini_api_key",
-        modelId: "gemini-3.1-flash-tts-preview",
+        modelId: "gemini-3.8-flash-lite-tts",
         endpointMethod: "streamGenerateContent",
         voiceName: "Zephyr",
         temperature: 1,
