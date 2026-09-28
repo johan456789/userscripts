@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
+// @version      1.3.1
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -12,6 +12,7 @@
 // @match        https://medium.com/*
 // @match        https://uxdesign.cc/*
 // @match        https://*.substack.com/*
+// @match        https://*.a16z.news/*
 // @match        https://*.udn.com/*
 // @match        https://*.mirrormedia.mg/*
 // @run-at       document-start
