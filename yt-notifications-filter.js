@@ -5,7 +5,7 @@
 // @grant        none
 // @run-at       document-end
 // @noframes
-// @version      0.1.5
+// @version      0.1.7
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/debounce.js
 // @updateURL    https://github.com/johan456789/userscripts/raw/main/yt-notifications-filter.js
@@ -18,6 +18,7 @@ logger("Userscript started.");
 const CLASSES = {
   style: "yt-notification-filter-style",
   filterBar: "yt-notification-filter-bar",
+  durationChip: "yt-notification-duration-chip",
 };
 
 const SELECTORS = {
@@ -40,8 +41,10 @@ const FILTERS = [
 
 let currentFilterId = "videos";
 const authorCache = {};
+const durationCache = {};
 const OBSERVER_DEBOUNCE_MS = 100;
 const OBSERVER_MAX_WAIT_MS = 500;
+const INNER_TUBE_CLIENT_VERSION = "2.20250116.10.00";
 
 (function () {
   "use strict";
@@ -60,6 +63,25 @@ const OBSERVER_MAX_WAIT_MS = 500;
       }
       .${CLASSES.filterBar} button {
         cursor: pointer;
+      }
+      .thumbnail-container.style-scope.ytd-notification-renderer {
+        position: relative;
+      }
+      .${CLASSES.durationChip} {
+        position: absolute;
+        right: 2px;
+        bottom: 2px;
+        z-index: 1;
+        background-color: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.3;
+        letter-spacing: 0;
+        padding: 1px 3px;
+        border-radius: 3px;
+        pointer-events: none;
+        font-family: Roboto, Arial, sans-serif;
       }
     `;
     document.head.appendChild(style);
@@ -110,6 +132,7 @@ const OBSERVER_MAX_WAIT_MS = 500;
     items.forEach((item) => {
       simplifyNotificationMessage(item);
       enrichWithAuthor(item);
+      enrichWithDuration(item);
       const type = getNotificationType(item);
       item.style.display = filter.matches(type) ? "" : "none";
     });
@@ -156,6 +179,97 @@ const OBSERVER_MAX_WAIT_MS = 500;
     const href = link.getAttribute("href") || "";
     const match = href.match(/\/(?:watch\?v=|shorts\/)([a-zA-Z0-9_-]{11})/);
     return match ? match[1] : null;
+  }
+
+  function formatDuration(totalSeconds) {
+    const secs = Math.floor(Number(totalSeconds));
+    if (!Number.isFinite(secs) || secs < 0) {
+      return null;
+    }
+    const hours = Math.floor(secs / 3600);
+    const minutes = Math.floor((secs % 3600) / 60);
+    const seconds = secs % 60;
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  async function fetchVideoDuration(videoId) {
+    if (durationCache[videoId]) {
+      return durationCache[videoId];
+    }
+
+    const response = await fetch(
+      "https://www.youtube.com/youtubei/v1/player",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: "WEB",
+              clientVersion: INNER_TUBE_CLIENT_VERSION,
+            },
+          },
+          videoId,
+        }),
+      },
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    if (data?.videoDetails?.isLiveContent) {
+      durationCache[videoId] = "LIVE";
+      return "LIVE";
+    }
+    const formatted = formatDuration(data?.videoDetails?.lengthSeconds);
+    if (formatted) {
+      durationCache[videoId] = formatted;
+    }
+    return formatted;
+  }
+
+  function renderDurationChip(item, label) {
+    const container = item.querySelector(
+      ".thumbnail-container.style-scope.ytd-notification-renderer",
+    );
+    if (!container) {
+      return false;
+    }
+    let chip = container.querySelector(`:scope > .${CLASSES.durationChip}`);
+    if (!chip) {
+      chip = document.createElement("span");
+      chip.className = CLASSES.durationChip;
+      container.appendChild(chip);
+    }
+    chip.textContent = label;
+    return true;
+  }
+
+  async function enrichWithDuration(item) {
+    if (item.dataset.durationEnriched) return;
+
+    const videoId = getVideoId(item);
+    if (!videoId) return;
+
+    if (durationCache[videoId]) {
+      if (renderDurationChip(item, durationCache[videoId])) {
+        item.dataset.durationEnriched = "true";
+      }
+      return;
+    }
+
+    try {
+      const label = await fetchVideoDuration(videoId);
+      if (!label) return;
+      if (renderDurationChip(item, label)) {
+        item.dataset.durationEnriched = "true";
+      }
+    } catch (_err) {
+      logger("Failed to fetch duration for " + videoId);
+    }
   }
 
   async function enrichWithAuthor(item) {
