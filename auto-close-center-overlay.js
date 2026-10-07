@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.5.0
+// @version      1.6.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -16,6 +16,8 @@
 // @match        https://*.udn.com/*
 // @match        https://*.mirrormedia.mg/*
 // @match        https://*.ltn.com.tw/*
+// @match        https://www.techbang.com/*
+// @match        https://techbang.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
@@ -33,6 +35,8 @@ const logger = Logger("[Auto-Close-Overlay]");
  *   persistent  - if true, keeps monitoring to close recurring idle overlays (default false)
  * Selectors may include attribute conditions (e.g. [style*="block"]) so overlays that are
  * pre-rendered hidden and only toggled visible via inline style are only clicked when shown.
+ * For overlays appended visible and later hidden via inline style, guard with
+ * :not([style*="none"]) so hidden copies are skipped while they fade out.
  */
 const SITES = [
   {
@@ -69,6 +73,14 @@ const SITES = [
     selectors: [
       "div.softPush_notification > button.softPush_refuse",
       '#idle-notice[style*="block"] #lightbox-close',
+    ],
+    persistent: true,
+  },
+  {
+    match: /(^|\.)techbang\.com$/,
+    selectors: [
+      '#idle-container:not([style*="none"]) #close-btn',
+      '#idle-container:not([style*="none"]) #overlay',
     ],
     persistent: true,
   },
