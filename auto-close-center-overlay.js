@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.3.1
+// @version      1.4.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -15,6 +15,7 @@
 // @match        https://*.a16z.news/*
 // @match        https://*.udn.com/*
 // @match        https://*.mirrormedia.mg/*
+// @match        https://*.ltn.com.tw/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
@@ -60,6 +61,10 @@ const SITES = [
     match: /mirrormedia\.mg/,
     selectors: ['section[class*="idle-timeout-modal__Background"] .close'],
     persistent: true,
+  },
+  {
+    match: /(^|\.)ltn\.com\.tw$/,
+    selectors: ["div.softPush_notification > button.softPush_refuse"],
   },
 ];
 
