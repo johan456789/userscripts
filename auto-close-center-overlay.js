@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.4.0
+// @version      1.5.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -31,6 +31,8 @@ const logger = Logger("[Auto-Close-Overlay]");
  *   match       - regex tested against window.location.hostname
  *   selectors   - array of CSS selectors for the close button(s); each is tried in order
  *   persistent  - if true, keeps monitoring to close recurring idle overlays (default false)
+ * Selectors may include attribute conditions (e.g. [style*="block"]) so overlays that are
+ * pre-rendered hidden and only toggled visible via inline style are only clicked when shown.
  */
 const SITES = [
   {
@@ -64,7 +66,11 @@ const SITES = [
   },
   {
     match: /(^|\.)ltn\.com\.tw$/,
-    selectors: ["div.softPush_notification > button.softPush_refuse"],
+    selectors: [
+      "div.softPush_notification > button.softPush_refuse",
+      '#idle-notice[style*="block"] #lightbox-close',
+    ],
+    persistent: true,
   },
 ];
 
@@ -99,6 +105,10 @@ const SITES = [
     return false;
   }
 
+  function matchesAny() {
+    return selectors.some((sel) => document.querySelector(sel));
+  }
+
   const foundInitially = findAndClick();
   if (foundInitially && !persistent) return;
 
@@ -107,7 +117,7 @@ const SITES = [
   const RETRY_INTERVAL = 100;
 
   const observer = new MutationObserver(() => {
-    if (!document.querySelector(selectors[0])) return;
+    if (!matchesAny()) return;
 
     if (persistent) {
       findAndClick();
@@ -125,7 +135,7 @@ const SITES = [
         logger("Max retries reached, giving up");
         return;
       }
-      if (!document.querySelector(selectors[0])) {
+      if (!matchesAny()) {
         clearInterval(interval);
         return;
       }
@@ -136,5 +146,7 @@ const SITES = [
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
+    attributes: true,
+    attributeFilter: ["style"],
   });
 })();
