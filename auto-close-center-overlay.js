@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.6.0
+// @version      1.8.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -37,6 +37,8 @@ const logger = Logger("[Auto-Close-Overlay]");
  * pre-rendered hidden and only toggled visible via inline style are only clicked when shown.
  * For overlays appended visible and later hidden via inline style, guard with
  * :not([style*="none"]) so hidden copies are skipped while they fade out.
+ * For overlays shown by toggling a class (e.g. .show) on a pre-rendered element, guard with
+ * that class and keep "class" in the observer's attributeFilter below.
  */
 const SITES = [
   {
@@ -60,7 +62,12 @@ const SITES = [
   },
   {
     match: /udn\.com/,
-    selectors: ["body > section.udn-idle .btn.close-btn"],
+    selectors: [
+      // Guard with body.idle-open: the section stays in the DOM even when the
+      // idle overlay is closed, so without the guard this always matches.
+      "body.idle-open > section.udn-idle .btn.close-btn",
+      ".udn-privilege-modal.show .udn-privilege-close-button",
+    ],
     persistent: true,
   },
   {
@@ -128,11 +135,31 @@ const SITES = [
   const MAX_RETRIES = 20;
   const RETRY_INTERVAL = 100;
 
+  // Persistent sites: a single click can land before the site has bound its
+  // own close handler (e.g. UDN re-renders the idle overlay with Vue just
+  // before showing it), and no further DOM mutations may follow. Keep
+  // retrying for a short window while the overlay is still visible.
+  let persistentInterval = null;
+  function startPersistentRetries() {
+    if (persistentInterval) return;
+    let tries = 0;
+    persistentInterval = setInterval(() => {
+      if (!matchesAny() || tries >= MAX_RETRIES) {
+        clearInterval(persistentInterval);
+        persistentInterval = null;
+        return;
+      }
+      tries++;
+      findAndClick();
+    }, RETRY_INTERVAL);
+  }
+
   const observer = new MutationObserver(() => {
     if (!matchesAny()) return;
 
     if (persistent) {
       findAndClick();
+      startPersistentRetries();
       return;
     }
 
@@ -155,10 +182,12 @@ const SITES = [
     }, RETRY_INTERVAL);
   });
 
-  observer.observe(document.documentElement, {
+  // Observe `document` (not documentElement): at @run-at document-start the
+  // <html> element may not exist yet, and observe(documentElement) throws.
+  observer.observe(document, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["style"],
+    attributeFilter: ["style", "class"],
   });
 })();
