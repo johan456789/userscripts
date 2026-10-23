@@ -1,13 +1,14 @@
 // ==UserScript==
-// @name         Unlock Right-Click & Text Selection
+// @name         Unlock Right-Click, Text Selection & Copy
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
-// @description  Unlock right-click menu and text selection on websites that block them
+// @version      2.1.0
+// @description  Unlock right-click menu, text selection and copy on websites that block or hijack them
 // @author       You
 // @match        https://*.pixnet.net/*
 // @match        https://www.granitefirm.com/*
 // @match        https://blog.udn.com/*
 // @match        https://kgbestate.com/*
+// @match        https://*.ft.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
@@ -149,5 +150,5 @@
     onDOMReady();
   }
 
-  logger("v2.0.0 applied (accessor-lock + sweep + selection protection + CSS)");
+  logger("applied (accessor-lock + sweep + selection protection + CSS)");
 })();
