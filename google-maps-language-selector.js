@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Maps Language Selector
 // @namespace    http://tampermonkey.net/
-// @version      1.4.0
+// @version      1.4.1
 // @description  Adds a language selector button to Google Maps.
 // @author       You
 // @match        https://www.google.com/maps*
@@ -397,6 +397,11 @@
         CONTAINER_SELECTOR,
         (container) => {
           logger("Container found:", container);
+          if (!container) {
+            // waitForElement calls back with null on timeout.
+            logger.error("Header container not found; language selector not inserted.");
+            return;
+          }
           if (document.getElementById(BUTTON_ID)) {
             logger("Language selector already inserted.");
             return;
