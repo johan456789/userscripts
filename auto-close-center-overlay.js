@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.8.0
+// @version      1.8.1
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -43,7 +43,9 @@ const logger = Logger("[Auto-Close-Overlay]");
 const SITES = [
   {
     match: /shopee\.tw/,
-    selectors: ["#HomePagePopupBannerSection > div > div.e_KtkD.Xg_fY5 > div"],
+    // Structural selector: the close icon is the 2nd child of the banner's inner wrapper.
+    // Avoid the hashed class names (e.g. e_KtkD), which change between Shopee builds.
+    selectors: ["#HomePagePopupBannerSection > div > div:nth-child(2) > div"],
   },
   {
     match: /mobile01\.com/,
