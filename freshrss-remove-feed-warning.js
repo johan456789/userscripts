@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         FreshRSS Remove Feed Warning
 // @namespace    http://tampermonkey.net/
-// @version      0.1.2
+// @version      0.1.3
 // @description  Removes the warning icons (::before pseudo-elements) from feed items in FreshRSS sidebar
 // @author       You
-// @match        *://freshrss.freshrss.orb.local/i/*
+// @include      *://freshrss.*.ts.net/i/*
 // @grant        none
 // @run-at       document-start
 // @require      https://github.com/johan456789/userscripts/raw/main/utils/logger.js
