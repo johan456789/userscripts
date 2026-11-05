@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.8.1
+// @version      1.8.2
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -33,6 +33,8 @@ const logger = Logger("[Auto-Close-Overlay]");
  *   match       - regex tested against window.location.hostname
  *   selectors   - array of CSS selectors for the close button(s); each is tried in order
  *   persistent  - if true, keeps monitoring to close recurring idle overlays (default false)
+ *   hideCss     - optional CSS selector hidden immediately via an injected style; use when
+ *                 the site only binds its close handler late (clicks are no-ops until then)
  * Selectors may include attribute conditions (e.g. [style*="block"]) so overlays that are
  * pre-rendered hidden and only toggled visible via inline style are only clicked when shown.
  * For overlays appended visible and later hidden via inline style, guard with
@@ -46,6 +48,9 @@ const SITES = [
     // Structural selector: the close icon is the 2nd child of the banner's inner wrapper.
     // Avoid the hashed class names (e.g. e_KtkD), which change between Shopee builds.
     selectors: ["#HomePagePopupBannerSection > div > div:nth-child(2) > div"],
+    // Clicks are no-ops until Shopee hydrates (~1-1.5s after the popup shows), so also
+    // hide the full-screen dim layer that wraps the banner, two levels above the section.
+    hideCss: "div:has(> div > #HomePagePopupBannerSection)",
   },
   {
     match: /mobile01\.com/,
@@ -104,11 +109,24 @@ const SITES = [
     return;
   }
 
-  const { selectors, persistent = false } = site;
+  const { selectors, persistent = false, hideCss } = site;
 
   logger(
     `Monitoring for overlay${persistent ? " (persistent)" : ""}`,
   );
+
+  // At document-start <html> may not exist yet; retry from the observer.
+  let hideStyleInjected = !hideCss;
+  function injectHideStyle() {
+    if (hideStyleInjected) return;
+    const parent = document.head || document.documentElement;
+    if (!parent) return;
+    const style = document.createElement("style");
+    style.textContent = `${hideCss} { display: none !important; }`;
+    parent.appendChild(style);
+    hideStyleInjected = true;
+  }
+  injectHideStyle();
 
   function clickButton(el, sel) {
     logger(`Clicked close button: ${sel}`);
@@ -157,6 +175,7 @@ const SITES = [
   }
 
   const observer = new MutationObserver(() => {
+    injectHideStyle();
     if (!matchesAny()) return;
 
     if (persistent) {
