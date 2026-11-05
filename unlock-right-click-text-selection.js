@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unlock Right-Click, Text Selection & Copy
 // @namespace    http://tampermonkey.net/
-// @version      2.1.0
+// @version      2.2.0
 // @description  Unlock right-click menu, text selection and copy on websites that block or hijack them
 // @author       You
 // @match        https://*.pixnet.net/*
@@ -9,6 +9,7 @@
 // @match        https://blog.udn.com/*
 // @match        https://kgbestate.com/*
 // @match        https://*.ft.com/*
+// @match        https://www.hk01.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
