@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Close Center Overlay
 // @namespace    http://tampermonkey.net/
-// @version      1.8.2
+// @version      1.9.0
 // @description  Auto-closes center overlay/popup modals on supported websites
 // @author       You
 // @match        https://shopee.tw/*
@@ -18,6 +18,7 @@
 // @match        https://*.ltn.com.tw/*
 // @match        https://www.techbang.com/*
 // @match        https://techbang.com/*
+// @match        https://www.windowscentral.com/*
 // @run-at       document-start
 // @grant        none
 // @license      MIT
@@ -95,6 +96,16 @@ const SITES = [
     selectors: [
       '#idle-container:not([style*="none"]) #close-btn',
       '#idle-container:not([style*="none"]) #overlay',
+    ],
+    persistent: true,
+  },
+  {
+    match: /(^|\.)windowscentral\.com$/,
+    selectors: [
+      // Exit-intent newsletter modal, shown when the mouse leaves the page.
+      '.exit-intent:not([aria-hidden="true"]) .exit-intent__close-button',
+      // Newsletter modal is pre-rendered with .hidden and shown by removing it.
+      ".newsletter-modal:not(.hidden) .close-button",
     ],
     persistent: true,
   },
@@ -209,6 +220,6 @@ const SITES = [
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["style", "class"],
+    attributeFilter: ["style", "class", "aria-hidden"],
   });
 })();
