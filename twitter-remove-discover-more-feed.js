@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Remove Discover More Feed
 // @namespace    http://tampermonkey.net/
-// @version      1.0.6
+// @version      1.0.7
 // @description  Hide the irrelevant "Discover more" feed and everything after it in comment threads.
 // @author       You
 // @match        https://*.twitter.com/*
@@ -24,24 +24,25 @@ logger("Userscript started.");
 (function () {
   "use strict";
 
-  const CELL_SELECTOR = 'div[data-testid="cellInnerDiv"]';
+  // X now renders timelines as virtualized lists: <ul> rows with data-index.
+  // Keep the old cellInnerDiv markup as a fallback for older app versions.
+  const CELL_SELECTOR = 'li[data-index], div[data-testid="cellInnerDiv"]';
   const DISCOVER_TEXT = "discover more";
+  const HIDDEN_FROM_ATTR = "data-remove-discover-more-from";
 
   function cellContainsDiscoverMore(cell) {
-    // Method 1: Check spans with exact text match (original mechanism)
-    const spans = cell.querySelectorAll("span");
-    for (const span of spans) {
-      const text = span.textContent || "";
-      if (text.trim().toLowerCase() === DISCOVER_TEXT) {
+    // Current markup puts the label in an unqualified h2; older markup used
+    // spans (sometimes under a role="heading" h2).
+    for (const heading of cell.querySelectorAll("h2, h3")) {
+      const text = heading.textContent || "";
+      if (text.trim().toLowerCase().includes(DISCOVER_TEXT)) {
         return true;
       }
     }
 
-    // Method 2: Check h2 headings containing "Discover more" (new situation with heading structure)
-    const headings = cell.querySelectorAll('h2[role="heading"]');
-    for (const heading of headings) {
-      const text = heading.textContent || "";
-      if (text.trim().toLowerCase().includes(DISCOVER_TEXT)) {
+    for (const span of cell.querySelectorAll("span")) {
+      const text = span.textContent || "";
+      if (text.trim().toLowerCase() === DISCOVER_TEXT) {
         return true;
       }
     }
@@ -49,28 +50,53 @@ logger("Userscript started.");
     return false;
   }
 
-  function listKey(cell) {
-    // The photo viewer list lives in #layers / role="dialog" and appears BEFORE
-    // <main> in DOM order. Each list gets its own hide flag so a marker in one
-    // list never wipes the other list behind/beside it.
-    return cell.closest('[role="dialog"], #layers') ? "overlay" : "main";
+  function listForCell(cell) {
+    // Scope each virtualized list on its own so a marker in the photo overlay
+    // never hides the timeline behind it. Fall back to the old main/overlay
+    // containers for cellInnerDiv markup.
+    const list = cell.closest("ul, ol");
+    if (list) {
+      return list;
+    }
+    return cell.closest('[role="dialog"], #layers, main') || document.body;
+  }
+
+  function indexOfCell(cell, cells) {
+    const raw = cell.getAttribute("data-index");
+    return raw === null ? cells.indexOf(cell) : Number(raw);
   }
 
   function hideDiscoverMoreAndFollowing() {
-    const cells = document.querySelectorAll(CELL_SELECTOR);
-    const hideFromHereByList = { main: false, overlay: false };
+    const cellsByList = new Map();
 
-    for (const cell of cells) {
-      const key = listKey(cell);
-      if (!hideFromHereByList[key] && cellContainsDiscoverMore(cell)) {
+    for (const cell of document.querySelectorAll(CELL_SELECTOR)) {
+      const list = listForCell(cell);
+      if (!cellsByList.has(list)) {
+        cellsByList.set(list, []);
+      }
+      cellsByList.get(list).push(cell);
+    }
+
+    for (const [list, cells] of cellsByList) {
+      // Remember the marker index on the list itself: virtualized rows are
+      // recycled as you scroll, so the marker cell can leave the DOM.
+      let hideFrom = list.getAttribute(HIDDEN_FROM_ATTR);
+
+      if (hideFrom === null) {
+        const marker = cells.find(cellContainsDiscoverMore);
+        if (!marker) {
+          continue;
+        }
+        hideFrom = String(indexOfCell(marker, cells));
+        list.setAttribute(HIDDEN_FROM_ATTR, hideFrom);
         logger(
-          `"Discover more" marker found in ${key} list. Hiding this cell and all following cells in the same list.`
+          `"Discover more" marker found. Hiding this cell and all following cells in this list.`
         );
-        hideFromHereByList[key] = true;
       }
 
-      if (hideFromHereByList[key]) {
-        if (cell.style.display !== "none") {
+      const from = Number(hideFrom);
+      for (const cell of cells) {
+        if (indexOfCell(cell, cells) >= from && cell.style.display !== "none") {
           cell.style.display = "none";
         }
       }
